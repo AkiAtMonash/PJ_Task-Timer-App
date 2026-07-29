@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- UI は Compose で作るので、XML テーマは「起動直後の見た目」を決めるだけの薄いもの。
+         DayNight ではなく Material（＝ダーク）固定にしているのは、
+         端末がライトテーマでもこのアプリだけは常に暗くするため。 -->
+    <style name="Theme.TaskTimer" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ink</item>
+    </style>
+</resources>

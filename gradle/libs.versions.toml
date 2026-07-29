@@ -1,0 +1,45 @@
+## バージョンはすべてここに集約する（docs/02_ARCHITECTURE.md 1 章）。
+## build.gradle.kts にバージョン文字列を直書きしないこと。
+
+[versions]
+# AGP 9.0.x は Kotlin Gradle Plugin 2.2.10 を内包し、自分で適用する。
+# よって org.jetbrains.kotlin.android は「書かない」のが正しい（書くと衝突して落ちる）。
+# kotlin の番号だけ残しているのは、Compose コンパイラプラグインや
+# KSP（Phase 1 で追加）が Kotlin と完全一致のバージョンを要求するため。
+agp = "9.0.1"
+kotlin = "2.2.10"
+
+# Compose は必ず BOM 経由。個別バージョンは書かない。
+composeBom = "2026.06.00"
+
+# ここは「最新」ではなく「compileSdk 36 に収まる最新」を選ぶこと。
+# AAR のメタデータ（minCompileSdk）で確認済み：
+#   core-ktx      1.19.0 -> 37 ✕ / 1.18.0 -> 36 ✅
+#   lifecycle     2.11.0 -> 37 ✕ / 2.10.0 -> 35 ✅
+#     ※ lifecycle はグループ内でバージョンが揃えられるため、直接使っていない
+#        lifecycle-runtime-compose まで一緒に上がって compileSdk 37 を要求してくる
+#   activity-compose 1.13.0 -> 36 ✅
+androidxCore = "1.18.0"
+androidxLifecycle = "2.10.0"
+androidxActivity = "1.13.0"
+
+junit = "4.13.2"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidxCore" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "androidxLifecycle" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidxActivity" }
+
+# BOM。これを platform() で入れると以下の compose 系はバージョン指定不要になる。
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

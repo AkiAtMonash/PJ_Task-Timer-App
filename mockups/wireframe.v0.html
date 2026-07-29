@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TaskTimer — 画面ワイヤーフレーム</title>
+<style>
+  :root{
+    --bg:#0d0f13; --panel:#151920; --panel2:#1c212b; --line:#2a3140;
+    --fg:#e8ecf3; --dim:#8d97a8; --dim2:#5d6779;
+    --accent:#5b9dff; --warn:#ff8a4c; --danger:#ff5c5c; --ok:#4ccf8f;
+    --sleep:#a77bff; --uni:#ffd24c; --job:#ff5c5c; --hobby:#5b9dff;
+    --chore:#ff9d4c; --self:#4ccf8f;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif;
+    padding:32px 20px 80px;
+  }
+  h1{font-size:22px;margin:0 0 6px}
+  .sub{color:var(--dim);font-size:14px;margin:0 0 28px;line-height:1.7}
+  .sub code{background:var(--panel2);padding:2px 6px;border-radius:4px;font-size:12px}
+
+  .rail{display:flex;gap:26px;overflow-x:auto;padding-bottom:24px;align-items:flex-start}
+  .slot{flex:0 0 auto;width:300px}
+  .cap{font-size:13px;color:var(--dim);margin:0 0 10px;font-weight:600}
+  .cap b{color:var(--fg)}
+  .note{font-size:11.5px;color:var(--dim2);margin:10px 2px 0;line-height:1.6}
+
+  .phone{
+    width:300px;height:620px;border-radius:34px;background:var(--panel);
+    border:1px solid var(--line);padding:16px 16px 18px;
+    display:flex;flex-direction:column;position:relative;overflow:hidden;
+  }
+  .phone.blocked{border-color:#5a2b2b;background:#14090a}
+  .statusbar{display:flex;justify-content:space-between;font-size:10px;color:var(--dim2);margin-bottom:14px;flex:0 0 auto}
+
+  .chip{display:inline-block;font-size:10.5px;padding:3px 9px;border-radius:99px;font-weight:700;letter-spacing:.02em}
+  .c-job{background:rgba(255,92,92,.16);color:var(--job)}
+  .c-uni{background:rgba(255,210,76,.16);color:var(--uni)}
+  .c-hobby{background:rgba(91,157,255,.16);color:var(--hobby)}
+
+  .task{font-size:23px;font-weight:700;margin:11px 0 0}
+  .goal{font-size:13px;color:var(--dim);margin:9px 0 0;line-height:1.5}
+
+  .elapsed{font-size:53px;font-weight:200;letter-spacing:-.02em;text-align:center;
+           font-variant-numeric:tabular-nums;margin:26px 0 4px}
+  .elapsed.over{color:var(--warn)}
+  .meta{text-align:center;font-size:12px;color:var(--dim);margin-bottom:18px}
+
+  .bar{height:7px;background:var(--panel2);border-radius:99px;overflow:hidden;display:flex}
+  .bar i{display:block;height:100%;background:var(--accent)}
+  .bar i.ov{background:var(--warn)}
+
+  .spacer{flex:1}
+  .btn{display:block;width:100%;padding:14px;border-radius:13px;border:none;text-align:center;
+       font-size:14.5px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:9px}
+  .btn.pri{background:var(--accent);color:#07101f}
+  .btn.sec{background:transparent;color:var(--dim);border:1px solid var(--line)}
+  .btn.danger{background:var(--danger);color:#fff}
+  .btn:disabled{opacity:.32;cursor:not-allowed}
+
+  .q{font-size:15px;font-weight:700;margin:4px 0 14px}
+  .grid{display:flex;flex-wrap:wrap;gap:8px}
+  .pill{padding:11px 13px;border-radius:11px;background:var(--panel2);border:1px solid var(--line);
+        font-size:13px;cursor:pointer;font-family:inherit;color:var(--fg);flex:1 1 auto;text-align:center}
+  .pill:hover{border-color:var(--dim2)}
+  .pill.on{background:rgba(91,157,255,.15);border-color:var(--accent);color:var(--accent);font-weight:700}
+  .pill .t{display:block;font-size:9.5px;color:var(--dim2);margin-top:3px;font-weight:600}
+
+  .rate{display:flex;flex-direction:column;gap:9px;margin-top:6px}
+  .rate button{padding:15px;border-radius:12px;background:var(--panel2);border:1px solid var(--line);
+               color:var(--fg);font-size:14px;cursor:pointer;font-family:inherit;text-align:left}
+  .rate button.def{border-color:var(--accent)}
+  .rate button small{color:var(--dim2);font-size:10.5px;float:right;margin-top:3px}
+
+  .field{background:var(--panel2);border:1px solid var(--line);border-radius:11px;
+         padding:13px;font-size:13px;color:var(--dim2);margin-top:4px}
+
+  .hr{height:1px;background:var(--line);margin:16px 0}
+  .banner{font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--danger);text-align:center;margin-bottom:4px}
+  .big{font-size:40px;font-weight:300;text-align:center;font-variant-numeric:tabular-nums}
+  .pct{font-size:15px;color:var(--warn);text-align:center;font-weight:700;margin-top:2px}
+  .totalbox{background:var(--panel2);border:1px solid var(--line);border-radius:13px;
+            padding:13px;text-align:center;margin-top:14px}
+  .totalbox span{font-size:10.5px;color:var(--dim);letter-spacing:.08em;display:block}
+  .totalbox strong{font-size:31px;font-weight:400;font-variant-numeric:tabular-nums;display:block;margin-top:3px}
+  .escape{position:absolute;top:12px;right:14px;font-size:9px;color:#4a2f2f;letter-spacing:.04em}
+
+  .notif{background:var(--panel2);border:1px solid var(--line);border-radius:15px;padding:13px}
+  .notif .hd{display:flex;justify-content:space-between;font-size:10.5px;color:var(--dim2);margin-bottom:7px}
+  .notif .ttl{font-size:14px;font-weight:700}
+  .notif .ln{font-size:11.5px;color:var(--dim);margin-top:4px}
+  .notif .act{margin-top:11px;padding-top:9px;border-top:1px solid var(--line);
+              font-size:12px;color:var(--accent);font-weight:700}
+  .wall{margin-top:16px;border:1px dashed var(--line);border-radius:13px;padding:22px 12px;
+        text-align:center;font-size:11.5px;color:var(--dim2);line-height:1.7}
+
+  .hist{font-size:12px}
+  .hd2{display:flex;justify-content:space-between;align-items:baseline;margin:14px 0 8px}
+  .hd2 b{font-size:13px}
+  .hd2 span{font-size:11px;color:var(--dim)}
+  .stack{height:6px;border-radius:99px;overflow:hidden;display:flex;margin-bottom:12px}
+  .row{display:flex;gap:9px;align-items:center;padding:9px 0;border-bottom:1px solid #1e232d}
+  .row .tm{color:var(--dim2);font-size:10px;width:44px;flex:0 0 auto;font-variant-numeric:tabular-nums}
+  .row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .du{color:var(--dim);font-size:11px;font-variant-numeric:tabular-nums}
+  .dot{width:7px;height:7px;border-radius:99px;flex:0 0 auto}
+</style>
+</head>
+<body>
+
+<h1>TaskTimer — 画面ワイヤーフレーム</h1>
+<p class="sub">
+  レイアウトと情報設計の確認用。色や余白は実装時に調整される。<br>
+  <b>超過画面の延長ボタンは実際に動きます。</b>押すと「合計所要時間」の 1 か所だけが変わることを確かめてください。<br>
+  横スクロールで全画面を確認できます。
+</p>
+
+<div class="rail">
+
+  <!-- 1. ホーム（進行中） -->
+  <div class="slot">
+    <p class="cap"><b>1.</b> ホーム（進行中）</p>
+    <div class="phone">
+      <div class="statusbar"><span>14:23</span><span>▮▮▮ 82%</span></div>
+      <span class="chip c-job">Job Hunting</span>
+      <div class="task">ES執筆</div>
+      <div class="goal">🎯 A社のガクチカを書き切る</div>
+      <div class="elapsed">23:41</div>
+      <div class="meta">予定 45分 / 残り 21分</div>
+      <div class="bar"><i style="width:53%"></i></div>
+      <div class="spacer"></div>
+      <button class="btn pri">タスクを切り替える</button>
+      <button class="btn sec">中断（記録して停止）</button>
+    </div>
+    <p class="note">経過時間が主役。残り時間は副。「何分やったか」が記録の本体だから。</p>
+  </div>
+
+  <!-- 2. ホーム（超過中） -->
+  <div class="slot">
+    <p class="cap"><b>2.</b> ホーム（超過中）</p>
+    <div class="phone">
+      <div class="statusbar"><span>14:47</span><span>▮▮▮ 79%</span></div>
+      <span class="chip c-job">Job Hunting</span>
+      <div class="task">ES執筆</div>
+      <div class="goal">🎯 A社のガクチカを書き切る</div>
+      <div class="elapsed over">47:12</div>
+      <div class="meta" style="color:var(--warn)">予定 45分 / <b>+2分 超過</b></div>
+      <div class="bar"><i style="width:88%"></i><i class="ov" style="width:12%"></i></div>
+      <div class="spacer"></div>
+      <button class="btn pri">タスクを切り替える</button>
+      <button class="btn sec">中断（記録して停止）</button>
+    </div>
+    <p class="note">超過すると数字が警告色に。バーは 100% を超えた分だけ別色で伸びる。</p>
+  </div>
+
+  <!-- 3. 超過画面 -->
+  <div class="slot">
+    <p class="cap"><b>3.</b> 超過画面 ★核心（操作できます）</p>
+    <div class="phone blocked">
+      <div class="escape">長押し3秒で非常口</div>
+      <div class="statusbar"><span>14:47</span><span>▮▮▮ 79%</span></div>
+      <div class="banner">予定時間を超過</div>
+      <div class="goal" style="text-align:center;margin:16px 0 20px;color:var(--fg);font-size:14px">
+        🎯 A社のガクチカを書き切る
+      </div>
+      <div class="big">47<span style="font-size:17px;color:var(--dim)">分</span></div>
+      <div class="meta" style="margin:4px 0 0">予定 45分</div>
+      <div class="pct">104%</div>
+      <div class="hr"></div>
+      <div class="q" style="font-size:13px">あと何分やる？</div>
+      <div class="grid" id="exts">
+        <button class="pill" data-m="5">+5</button>
+        <button class="pill" data-m="10">+10</button>
+        <button class="pill" data-m="15">+15</button>
+        <button class="pill" data-m="30">+30</button>
+      </div>
+      <div class="totalbox">
+        <span>合計所要時間</span>
+        <strong id="total">—</strong>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn pri" id="ext" disabled>延長する</button>
+      <button class="btn sec">タスクを終える</button>
+    </div>
+    <p class="note">
+      延長ボタンは<b>選ぶだけ</b>。各ボタンに数字を併記せず、合計は 1 か所に集約。<br>
+      超過率の分母は<b>当初の予定 45 分</b>。延長で分母を膨らませない（見積もり精度を測るため）。
+    </p>
+  </div>
+
+  <!-- 4. 評価 -->
+  <div class="slot">
+    <p class="cap"><b>4.</b> 切り替え Step 1：評価</p>
+    <div class="phone">
+      <div class="statusbar"><span>15:35</span><span>▮▮▮ 74%</span></div>
+      <span class="chip c-job">Job Hunting</span>
+      <div class="task" style="font-size:19px">ES執筆</div>
+      <div class="hr"></div>
+      <div style="text-align:center;margin:8px 0 20px">
+        <div style="font-size:10.5px;color:var(--dim);letter-spacing:.08em">経過時間</div>
+        <div style="font-size:33px;font-weight:300;margin-top:4px">1時間 12分</div>
+        <div style="font-size:12px;color:var(--warn);margin-top:5px">予定 45分 / 160%</div>
+      </div>
+      <div class="q">この時間の使い方は？</div>
+      <div class="rate">
+        <button>✅ 良かった<small>理由を入力</small></button>
+        <button class="def">🫳 普通<small>デフォルト</small></button>
+        <button>❌ 悪かった<small>理由を入力</small></button>
+      </div>
+    </div>
+    <p class="note">必ず経過時間を見せてから評価させる。既存の MacroDroid 運用を踏襲。</p>
+  </div>
+
+  <!-- 5. 次のタスク -->
+  <div class="slot">
+    <p class="cap"><b>5.</b> 切り替え Step 2：次のタスク</p>
+    <div class="phone">
+      <div class="statusbar"><span>15:36</span><span>▮▮▮ 74%</span></div>
+      <div class="q">次は何をする？</div>
+      <div class="grid">
+        <button class="pill">ES執筆</button>
+        <button class="pill">講義</button>
+        <button class="pill">Sleep</button>
+        <button class="pill">筋トレ</button>
+        <button class="pill">移動</button>
+        <button class="pill">昼食</button>
+        <button class="pill">Notion整理</button>
+        <button class="pill">風呂</button>
+      </div>
+      <div class="hr"></div>
+      <button class="pill" style="width:100%;color:var(--dim)">＋ 新しいタスク…</button>
+      <div class="spacer"></div>
+      <p class="note" style="margin:0;color:var(--dim2)">
+        使用頻度順に自動で並び替わる。<br>スクロールなしで 8 個が一目に入る密度。
+      </p>
+    </div>
+    <p class="note">プリセットを選ぶと、前回のタグ・ゴール・予定時間が次の画面にプリフィルされる。</p>
+  </div>
+
+  <!-- 6. 予定時間 -->
+  <div class="slot">
+    <p class="cap"><b>6.</b> 切り替え Step 3・4：ゴールと予定時間</p>
+    <div class="phone">
+      <div class="statusbar"><span>15:36</span><span>▮▮▮ 74%</span></div>
+      <span class="chip c-uni">Uni Study</span>
+      <div class="task" style="font-size:19px">講義</div>
+      <div class="hr"></div>
+      <div class="q" style="font-size:13px">ゴールは？</div>
+      <div class="field">統計の課題を提出まで終わらせる</div>
+      <div class="hr"></div>
+      <div class="q" style="font-size:13px">何分でやる？</div>
+      <div class="grid">
+        <button class="pill">15</button>
+        <button class="pill">25</button>
+        <button class="pill on">30</button>
+        <button class="pill">45</button>
+        <button class="pill">60</button>
+        <button class="pill">90</button>
+        <button class="pill">120</button>
+      </div>
+      <div class="field" style="margin-top:9px">自由入力 ___ 分</div>
+      <div class="spacer"></div>
+      <button class="btn pri">開始する</button>
+    </div>
+    <p class="note">ここまで最短 4 タップ。切り替えの摩擦を最小にすることが継続の条件。</p>
+  </div>
+
+  <!-- 7. 通知 -->
+  <div class="slot">
+    <p class="cap"><b>7.</b> 常駐通知とブロック</p>
+    <div class="phone">
+      <div class="statusbar"><span>14:23</span><span>▮▮▮ 82%</span></div>
+      <div class="notif">
+        <div class="hd"><span>TaskTimer</span><span>23:41</span></div>
+        <div class="ttl">ES執筆 · Job Hunting</div>
+        <div class="ln">🎯 A社のガクチカを書き切る</div>
+        <div class="ln">予定 45分 / 残り 21分</div>
+        <div class="act">切り替え</div>
+      </div>
+      <p class="note" style="margin:12px 2px 0">
+        セッション中ずっと表示。スワイプで消せない。<br>
+        「切り替え」から直接フローを開ける。
+      </p>
+      <div class="hr"></div>
+      <div class="wall">
+        <div style="font-size:26px;margin-bottom:8px">🚧</div>
+        超過中にホームボタンを押しても<br>
+        オーバーレイが画面を覆って引き戻す<br><br>
+        <span style="color:#4a5568">非常口：右上を 3 秒長押し</span>
+      </div>
+    </div>
+    <p class="note">オーバーレイはホーム画面の上にも残る。これが実質的な「逃げ場なし」の正体。</p>
+  </div>
+
+  <!-- 8. 履歴 -->
+  <div class="slot">
+    <p class="cap"><b>8.</b> 履歴</p>
+    <div class="phone">
+      <div class="statusbar"><span>23:10</span><span>▮▮▮ 41%</span></div>
+      <div class="q">履歴</div>
+      <div class="hist">
+        <div class="hd2"><b>7月29日（水）</b><span>計 15時間 20分</span></div>
+        <div class="stack">
+          <i style="width:33%;background:var(--sleep)"></i>
+          <i style="width:26%;background:var(--job)"></i>
+          <i style="width:18%;background:var(--uni)"></i>
+          <i style="width:13%;background:var(--hobby)"></i>
+          <i style="width:10%;background:var(--chore)"></i>
+        </div>
+        <div class="row"><span class="tm">21:30</span><span class="dot" style="background:var(--hobby)"></span><span class="nm">読書</span><span class="du">1:40</span><span>◯</span></div>
+        <div class="row"><span class="tm">19:00</span><span class="dot" style="background:var(--chore)"></span><span class="nm">夕食・皿洗い</span><span class="du">0:50</span><span>△</span></div>
+        <div class="row"><span class="tm">15:36</span><span class="dot" style="background:var(--uni)"></span><span class="nm">講義</span><span class="du">2:45</span><span>◯</span></div>
+        <div class="row"><span class="tm">14:23</span><span class="dot" style="background:var(--job)"></span><span class="nm">ES執筆 <span style="color:var(--warn);font-size:10px">↑2</span></span><span class="du">1:12</span><span>✕</span></div>
+        <div class="row"><span class="tm">07:00</span><span class="dot" style="background:var(--sleep)"></span><span class="nm">Sleep</span><span class="du">7:00</span><span>◯</span></div>
+        <div class="hd2"><b>7月28日（火）</b><span>計 14時間 05分</span></div>
+        <div class="stack">
+          <i style="width:31%;background:var(--sleep)"></i>
+          <i style="width:34%;background:var(--uni)"></i>
+          <i style="width:21%;background:var(--job)"></i>
+          <i style="width:14%;background:var(--self)"></i>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      <span style="color:var(--warn)">↑2</span> は延長 2 回の意味。<br>
+      日をまたぐ Sleep は DB では 1 レコードのまま、表示時に日境界で按分する。
+    </p>
+  </div>
+
+</div>
+
+<script>
+  // 超過画面：延長プリセットの選択 → 合計所要時間だけが更新される
+  var ELAPSED = 47; // 現在の経過分数
+  var pills = document.querySelectorAll('#exts .pill');
+  var total = document.getElementById('total');
+  var extBtn = document.getElementById('ext');
+
+  pills.forEach(function(p){
+    p.addEventListener('click', function(){
+      var already = p.classList.contains('on');
+      pills.forEach(function(q){ q.classList.remove('on'); });
+      if (already) {
+        total.textContent = '—';
+        extBtn.disabled = true;
+        return;
+      }
+      p.classList.add('on');
+      var m = parseInt(p.dataset.m, 10);
+      total.textContent = (ELAPSED + m) + '分';
+      extBtn.disabled = false;
+    });
+  });
+</script>
+
+</body>
+</html>

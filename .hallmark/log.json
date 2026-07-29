@@ -1,0 +1,14 @@
+[
+  {
+    "date": "2026-07-29",
+    "scope": "single-page",
+    "macrostructure": "Catalogue",
+    "theme": "custom",
+    "theme_axes": "dark / mono-display / chromatic-other (cyan 200 accent + reserved alert 32)",
+    "vibe": "instrument, austere, measured",
+    "genre": "atmospheric",
+    "enrichment": "none — typography only",
+    "brief": "TaskTimer · Android タスク時間計測アプリの画面ワイヤーフレーム（mockups/wireframe.html）",
+    "notes": "タグ 6 色が docs/01_SPEC.md §3.4 で Notion 同期のため色相固定。色相ではなく彩度で伝達路を分離（中立 0.012 / カテゴリ 0.10 / 操作 0.12 / 警報 0.20）。端末ベゼル・ステータスバーは gate 47 に従い削除。"
+  }
+]
