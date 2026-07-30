@@ -4,6 +4,7 @@ plugins {
     // "Cannot add extension with name 'kotlin'" で落ちる。書かないのが正解。
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -35,6 +36,12 @@ android {
     }
 }
 
+ksp {
+    // マイグレーションを書くときに前バージョンのスキーマ JSON が必要になるので出力しておく。
+    // 出力先: app/schemas/com.aki.tasktimer.data.db.TaskTimerDatabase/1.json
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 kotlin {
     compilerOptions {
         // compileOptions（Java 17）と揃えないと
@@ -53,6 +60,11 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+
+    implementation(libs.androidx.room.runtime)
+    ksp(libs.androidx.room.compiler)
+
+    implementation(libs.kotlinx.coroutines.core)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 
