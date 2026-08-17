@@ -1,0 +1,92 @@
+/* TaskTimer — デザイントークン
+ *
+ * wireframe.html の唯一の値の出どころ。
+ * Phase 2 で Compose の ui/theme/Color.kt · Type.kt · Spacing.kt に写す元データでもある。
+ *
+ * ── 色の設計 ────────────────────────────────────────────────
+ * docs/01_SPEC.md §3.4 でタグ 6 色が Notion と同一に固定されているため、
+ * 色相環の 6 箇所が先約済み。アクセントと警告を別色相で作ると必ず衝突する。
+ * よって伝達路は **彩度** で分ける：
+ *
+ *   chroma 0.012 … 中立（筐体・文字・罫線）
+ *   chroma 0.10  … カテゴリ（タグ 6 色。色相は仕様固定・彩度だけ揃える）
+ *   chroma 0.12  … 操作（hue 200 — タグ 6 色から最も遠い空き色相）
+ *   chroma 0.20  … 警報（hue 32 — 画面内で唯一の高彩度。超過だけが使える）
+ *
+ * ダークモードのみ。ライトテーマは作らない（CLAUDE.md）。
+ * ───────────────────────────────────────────────────────── */
+
+:root{
+  /* ── 中立（anchor hue 250） ───────────────────────── */
+  --color-paper:      oklch(14% 0.012 250);  /* 基底面 */
+  --color-paper-2:    oklch(18% 0.013 250);  /* 板・カード */
+  --color-paper-3:    oklch(23% 0.014 250);  /* 入力欄・ピル */
+  --color-rule:       oklch(32% 0.012 250);  /* 罫線 */
+  --color-rule-2:     oklch(42% 0.012 250);  /* 強めの罫線・境界 */
+  --color-muted:      oklch(68% 0.014 250);  /* 補助テキスト（paper-2 上で 5.9:1） */
+  --color-neutral:    oklch(80% 0.012 250);  /* 副次テキスト・進捗バー */
+  --color-ink:        oklch(95% 0.008 250);  /* 主テキスト・主ボタン地 */
+
+  /* ── 操作（唯一のアクセント · hue 200） ─────────────── */
+  --color-accent:     oklch(78% 0.12 200);   /* 選択中・リンク */
+  --color-accent-ink: oklch(16% 0.03 200);   /* アクセント面上の文字 */
+  --color-focus:      oklch(85% 0.14 200);   /* フォーカスリング */
+
+  /* ── 警報（画面内で唯一の高彩度 · hue 32） ──────────── */
+  --color-alert:      oklch(70% 0.20 32);    /* 超過・非常口 */
+  --color-alert-ink:  oklch(15% 0.04 32);    /* 警報面の地 */
+
+  /* ── カテゴリ：docs/01_SPEC.md §3.4 で色相固定。彩度のみ統一 ──
+   * 色相は変更禁止。v2 の Notion 同期で既存 DB のタグ色と対応させる。 */
+  --tag-sleep:  oklch(76% 0.10 305);  /* Sleep       — 紫 */
+  --tag-uni:    oklch(84% 0.10  95);  /* Uni Study   — 黄 */
+  --tag-job:    oklch(74% 0.10  25);  /* Job Hunting — 赤 */
+  --tag-hobby:  oklch(76% 0.10 255);  /* Hobby       — 青 */
+  --tag-chore:  oklch(78% 0.10  55);  /* Chore       — オレンジ */
+  --tag-self:   oklch(78% 0.10 150);  /* For Myself  — 緑 */
+
+  /* ── 書体：2 ファミリー（IBM Plex 超family） ──────────
+   * Mono は数字専用。等幅数字（tabular figures）が必要なのは
+   * 経過時間・所要時間・時刻・パーセントの 4 種。
+   * Android 実装時は Plex Sans JP の同梱が重い（1 ウェイト約 5MB）ので、
+   * 本文は端末フォント、数字だけ Plex Mono を同梱する選択肢もある。 */
+  --font-body:    "IBM Plex Sans JP", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  --font-display: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* ── 型階層：1.25（長三度）· 16px 基準 ─────────────── */
+  --text-2xs:  0.625rem;   /* 10px — ラベル専用。本文には使わない */
+  --text-xs:   0.75rem;    /* 12px */
+  --text-sm:   0.875rem;   /* 14px — 本文の下限 */
+  --text-base: 1rem;       /* 16px */
+  --text-md:   1.25rem;    /* 20px */
+  --text-lg:   1.5625rem;  /* 25px */
+  --text-xl:   1.9531rem;  /* 31px */
+  --text-2xl:  2.4414rem;  /* 39px */
+  --text-3xl:  3.0518rem;  /* 49px — 経過時間 */
+
+  /* ── 余白：4pt スケール ───────────────────────────── */
+  --space-3xs: 0.125rem;   /*  2px */
+  --space-2xs: 0.25rem;    /*  4px */
+  --space-xs:  0.5rem;     /*  8px */
+  --space-sm:  0.75rem;    /* 12px */
+  --space-md:  1rem;       /* 16px */
+  --space-lg:  1.5rem;     /* 24px */
+  --space-xl:  2.5rem;     /* 40px */
+  --space-2xl: 4rem;       /* 64px */
+  --space-3xl: 6rem;       /* 96px */
+
+  /* ── 角丸・罫線・重なり ───────────────────────────── */
+  --radius-card:  4px;
+  --radius-input: 3px;
+  --radius-pill:  999px;
+  --rule-hair:    1px;
+
+  --z-base:   1;
+  --z-raised: 10;
+
+  /* ── モーション ───────────────────────────────────
+   * primitive は 1 つだけ：選択と押下のフィードバック。
+   * フォーカスリングは絶対にトランジションしない（出るのが遅れる）。 */
+  --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-short: 140ms;
+}

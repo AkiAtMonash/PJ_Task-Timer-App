@@ -1,0 +1,62 @@
+## バージョンはすべてここに集約する（docs/02_ARCHITECTURE.md 1 章）。
+## build.gradle.kts にバージョン文字列を直書きしないこと。
+
+[versions]
+# AGP 9.0.x は Kotlin Gradle Plugin 2.2.10 を内包し、自分で適用する。
+# よって org.jetbrains.kotlin.android は「書かない」のが正しい（書くと衝突して落ちる）。
+# kotlin の番号だけ残しているのは、Compose コンパイラプラグインや
+# KSP（Phase 1 で追加）が Kotlin と完全一致のバージョンを要求するため。
+agp = "9.0.1"
+kotlin = "2.2.10"
+
+# KSP は Kotlin と完全一致のバージョンでないと動かない。
+# 「2.2.10-2.0.2」の前半が Kotlin、後半が KSP 自身の版。kotlin を上げたらここも必ず追従させる。
+ksp = "2.2.10-2.0.2"
+
+# Room 2.8.4 は minCompileSdk=34。compileSdk 36 で問題なし（AAR メタデータで確認済み）。
+room = "2.8.4"
+
+# Room が推移的に持ってくるのは 1.8.1 だが runtime スコープなので
+# コンパイル時に Flow を直接使えない。明示的に宣言する。
+coroutines = "1.10.2"
+
+# Compose は必ず BOM 経由。個別バージョンは書かない。
+composeBom = "2026.06.00"
+
+# ここは「最新」ではなく「compileSdk 36 に収まる最新」を選ぶこと。
+# AAR のメタデータ（minCompileSdk）で確認済み：
+#   core-ktx      1.19.0 -> 37 ✕ / 1.18.0 -> 36 ✅
+#   lifecycle     2.11.0 -> 37 ✕ / 2.10.0 -> 35 ✅
+#     ※ lifecycle はグループ内でバージョンが揃えられるため、直接使っていない
+#        lifecycle-runtime-compose まで一緒に上がって compileSdk 37 を要求してくる
+#   activity-compose 1.13.0 -> 36 ✅
+androidxCore = "1.18.0"
+androidxLifecycle = "2.10.0"
+androidxActivity = "1.13.0"
+
+junit = "4.13.2"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidxCore" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "androidxLifecycle" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidxActivity" }
+
+# BOM。これを platform() で入れると以下の compose 系はバージョン指定不要になる。
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
+
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

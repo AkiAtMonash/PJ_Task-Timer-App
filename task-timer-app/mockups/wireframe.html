@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TaskTimer — 画面設計</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans+JP:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R4 V4
+ * macrostructure: Catalogue（デバイス画面のスペックシート。ページ用 21 マクロは対象外 — SKILL.md の
+ *   ページ級装置は端末モックには適用しない旨を明示して省略）
+ * genre: atmospheric（ダークモード固定は CLAUDE.md の要件）· register: instrument（グロー・ブルーム・
+ *   グラデーション一切なし。計測器の筐体は灰色で、針だけが色を持つ）
+ * theme: custom OKLCH · anchor hue 250
+ * tone: utilitarian / austere — 「実験データを取る計測器」という README の自己定義に従う
+ *
+ * ── 色の設計の核 ──────────────────────────────────────────────
+ * docs/01_SPEC.md §3.4 でタグ 6 色が Notion と同一に固定されている。色相環の 6 箇所が
+ * 先約済みなので、アクセントと警告を「別の色相」で作ると必ずどこかに衝突する。
+ * そこで色相ではなく **彩度** で伝達路を分けた：
+ *
+ *   chroma 0.012 … 中立（筐体・文字・罫線）
+ *   chroma 0.10  … カテゴリ（タグ 6 色。色相は仕様固定・彩度だけ揃える）
+ *   chroma 0.12  … 操作（hue 200。タグ 6 色から最も遠い空き色相＝緑150と青255の中点）
+ *   chroma 0.20  … 警報（hue 32。画面内で唯一の高彩度。超過だけが使える）
+ *
+ * これで「落ち着いた色＝分類」「熱い色＝警報」が彩度だけで読み分けられる。
+ * タグ色を仕様どおり保ったまま、旧版の衝突 3 件を解消している。
+ * ─────────────────────────────────────────────────────────────
+ */
+
+:root{
+  /* ── 中立（anchor hue 250） ───────────────────────── */
+  --color-paper:      oklch(14% 0.012 250);
+  --color-paper-2:    oklch(18% 0.013 250);
+  --color-paper-3:    oklch(23% 0.014 250);
+  --color-rule:       oklch(32% 0.012 250);
+  --color-rule-2:     oklch(42% 0.012 250);
+  --color-muted:      oklch(68% 0.014 250);
+  --color-neutral:    oklch(80% 0.012 250);
+  --color-ink:        oklch(95% 0.008 250);
+
+  /* ── 操作（唯一のアクセント · hue 200） ─────────────── */
+  --color-accent:     oklch(78% 0.12 200);
+  --color-accent-ink: oklch(16% 0.03 200);
+  --color-focus:      oklch(85% 0.14 200);
+
+  /* ── 警報（画面内で唯一の高彩度 · hue 32） ──────────── */
+  --color-alert:      oklch(70% 0.20 32);
+  --color-alert-ink:  oklch(15% 0.04 32);
+
+  /* ── カテゴリ：docs/01_SPEC.md §3.4 で色相固定。彩度のみ統一 ── */
+  --tag-sleep:  oklch(76% 0.10 305);  /* 紫 */
+  --tag-uni:    oklch(84% 0.10  95);  /* 黄 */
+  --tag-job:    oklch(74% 0.10  25);  /* 赤 */
+  --tag-hobby:  oklch(76% 0.10 255);  /* 青 */
+  --tag-chore:  oklch(78% 0.10  55);  /* オレンジ */
+  --tag-self:   oklch(78% 0.10 150);  /* 緑 */
+
+  /* ── 書体：2 ファミリー（IBM Plex 超family）──────────── */
+  --font-body:    "IBM Plex Sans JP", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  --font-display: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* ── 型階層：1.25（長三度）· 16px 基準 ─────────────── */
+  --text-2xs:  0.625rem;   /* 10px — ラベル専用。本文には使わない */
+  --text-xs:   0.75rem;    /* 12px */
+  --text-sm:   0.875rem;   /* 14px — 本文の下限 */
+  --text-base: 1rem;       /* 16px */
+  --text-md:   1.25rem;    /* 20px */
+  --text-lg:   1.5625rem;  /* 25px */
+  --text-xl:   1.9531rem;  /* 31px */
+  --text-2xl:  2.4414rem;  /* 39px */
+  --text-3xl:  3.0518rem;  /* 49px */
+
+  /* ── 余白：4pt スケール ───────────────────────────── */
+  --space-3xs: 0.125rem;  --space-2xs: 0.25rem;  --space-xs:  0.5rem;
+  --space-sm:  0.75rem;   --space-md:  1rem;     --space-lg:  1.5rem;
+  --space-xl:  2.5rem;    --space-2xl: 4rem;     --space-3xl: 6rem;
+
+  /* ── 角丸・罫線・重なり ───────────────────────────── */
+  --radius-card: 4px;  --radius-input: 3px;  --radius-pill: 999px;
+  --rule-hair: 1px;
+  --z-base: 1; --z-raised: 10;
+
+  /* ── モーション：primitive は 1 つだけ ───────────────── */
+  --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-short: 140ms;
+}
+
+*{box-sizing:border-box}
+html{overflow-x:clip}
+body{
+  overflow-x:clip;
+  margin:0;
+  background:var(--color-paper);
+  color:var(--color-ink);
+  font-family:var(--font-body);
+  font-size:var(--text-base);
+  font-weight:400;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  padding:var(--space-xl) 0 var(--space-3xl);
+}
+
+/* ═══ ドキュメントの骨格 ═══════════════════════════════════ */
+/* 左に狭いラベル列、右に広い内容列 — 中央揃えを避けて軸を左に置く */
+.wrap{padding-inline:var(--space-lg);max-width:1400px}
+
+.masthead{
+  border-bottom:var(--rule-hair) solid var(--color-rule);
+  padding-bottom:var(--space-lg);
+  margin-bottom:var(--space-xl);
+}
+.masthead h1{
+  font-family:var(--font-display);
+  font-size:var(--text-md);
+  font-weight:600;
+  letter-spacing:-0.01em;
+  margin:0;
+  overflow-wrap:anywhere;
+  min-width:0;
+}
+.masthead p{
+  color:var(--color-muted);
+  font-size:var(--text-sm);
+  max-width:62ch;
+  margin:var(--space-sm) 0 0;
+}
+.masthead strong{color:var(--color-ink);font-weight:600}
+
+/* 帯：フローの段階ごと。上下の padding を意図的に不均等にする */
+.band{margin-top:var(--space-2xl)}
+.band:first-of-type{margin-top:var(--space-xl)}
+/* 見出しとその説明は必ず縦に積む。
+ * ラベルを見出しの横（左でも右でも）に置く形は gate 54 が自動不合格にする。
+ * 単一列であれば説明文はいくらでも付けてよい。 */
+.band__head{
+  display:flex;flex-direction:column;
+  padding-bottom:var(--space-sm);
+  margin-bottom:var(--space-lg);
+  border-bottom:var(--rule-hair) solid var(--color-rule);
+}
+.band__head h2{
+  font-size:var(--text-base);font-weight:600;margin:0;
+  letter-spacing:0.01em;
+  overflow-wrap:anywhere;min-width:0;
+}
+.band__head p{
+  color:var(--color-muted);font-size:var(--text-sm);
+  margin:var(--space-3xs) 0 0;max-width:62ch;
+}
+
+/* レール：横スクロールは *この箱の中だけ*。文書本体は横に動かない */
+.rail{
+  display:flex;gap:var(--space-lg);align-items:stretch;
+  overflow-x:auto;overflow-y:hidden;
+  padding-bottom:var(--space-md);
+  scroll-snap-type:x proximity;
+  scrollbar-color:var(--color-rule-2) transparent;
+}
+.slot{flex:0 0 auto;width:360px;scroll-snap-align:start;display:flex;flex-direction:column}
+.slot--note{width:300px}
+
+/* ═══ 画面ボード ═══════════════════════════════════════════ */
+/* 端末のベゼル・ノッチ・ステータスバーは描かない。
+ * 偽の端末クロームは Hallmark gate 47 が禁じている典型的な AI の癖であり、
+ * 実装の判断材料にもならない。代わりに Pixel 9a の論理幅 360dp に合わせた
+ * 素の板＋罫線＋キャプションという「活字的な枠」にする。 */
+/* flex:1 にすると、板の下に置いた注記の行数の差だけ板が伸び縮みして
+ * 「同じ端末なのに画面の高さが違う」状態になる。板は内容から独立させて固定する。 */
+.board{
+  width:100%;flex:0 0 auto;
+  min-height:640px;
+  background:var(--color-paper-2);
+  border:var(--rule-hair) solid var(--color-rule);
+  border-radius:var(--radius-card);
+  padding:var(--space-lg) var(--space-md) var(--space-md);
+  display:flex;flex-direction:column;
+  position:relative;
+}
+.board--alert{
+  background:var(--color-paper);
+  border-color:var(--color-alert);
+}
+.cap{
+  font-family:var(--font-display);
+  font-size:var(--text-xs);
+  color:var(--color-muted);
+  margin:0 0 var(--space-xs);
+  letter-spacing:0.02em;
+}
+.cap b{color:var(--color-ink);font-weight:600}
+.note{
+  font-size:var(--text-sm);
+  color:var(--color-muted);
+  margin:var(--space-md) 0 0;
+  max-width:46ch;
+}
+.note b{color:var(--color-ink);font-weight:600}
+.note .hot{color:var(--color-alert);font-weight:600}
+
+/* ═══ 部品 ═══════════════════════════════════════════════ */
+
+/* タグチップ：色相は仕様固定。地は同色相を混ぜた低彩度面 */
+.chip{
+  display:inline-flex;align-items:center;gap:var(--space-2xs);
+  font-size:var(--text-xs);font-weight:600;
+  padding:var(--space-3xs) var(--space-xs);
+  border-radius:var(--radius-pill);
+  letter-spacing:0.02em;
+  align-self:flex-start;
+}
+.chip::before{
+  content:"";width:6px;height:6px;border-radius:var(--radius-pill);
+  background:currentColor;flex:0 0 auto;
+}
+.c-job{color:var(--tag-job);   background:color-mix(in oklch, var(--tag-job)   14%, var(--color-paper-2))}
+.c-uni{color:var(--tag-uni);   background:color-mix(in oklch, var(--tag-uni)   14%, var(--color-paper-2))}
+.c-hobby{color:var(--tag-hobby);background:color-mix(in oklch, var(--tag-hobby) 14%, var(--color-paper-2))}
+
+/* ゴール標識：絵文字ではなく手描きの SVG マーク（gate 30） */
+.goal{
+  display:flex;align-items:flex-start;gap:var(--space-xs);
+  font-size:var(--text-sm);color:var(--color-neutral);
+  margin:var(--space-sm) 0 0;line-height:1.55;
+}
+.goal svg{flex:0 0 auto;margin-top:0.28em;color:var(--color-muted)}
+.goal--center{justify-content:center;text-align:left;color:var(--color-ink)}
+
+.task{
+  font-size:var(--text-md);font-weight:600;
+  margin:var(--space-sm) 0 0;letter-spacing:-0.01em;
+  overflow-wrap:anywhere;min-width:0;
+}
+
+/* 経過時間：このアプリの主役。暗地では細字が光学的に痩せるので太らせる */
+.elapsed{
+  font-family:var(--font-display);
+  font-size:var(--text-3xl);
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:-0.03em;line-height:1.05;
+  text-align:center;
+  margin:var(--space-lg) 0 var(--space-2xs);
+}
+.elapsed.over{color:var(--color-alert)}
+.meta{
+  text-align:center;font-size:var(--text-xs);color:var(--color-muted);
+  font-variant-numeric:tabular-nums;margin-bottom:var(--space-md);
+}
+.meta.over{color:var(--color-alert)}
+.meta b{font-weight:600}
+
+/* 進捗バー：予定内＝中立、超過分＝警報。操作色は使わない */
+.bar{
+  height:4px;background:var(--color-paper-3);
+  border-radius:var(--radius-pill);overflow:hidden;display:flex;
+}
+.bar i{display:block;height:100%;background:var(--color-neutral)}
+.bar i.ov{background:var(--color-alert)}
+
+.spacer{flex:1;min-height:var(--space-md)}
+.rule{height:var(--rule-hair);background:var(--color-rule);margin:var(--space-md) 0}
+
+/* ── ボタン：8 状態すべてに指定を持たせる ── */
+.btn{
+  display:block;width:100%;
+  padding:var(--space-sm) var(--space-md);
+  border-radius:var(--radius-input);border:var(--rule-hair) solid transparent;
+  text-align:center;font-family:inherit;
+  font-size:var(--text-sm);font-weight:600;line-height:1.4;
+  cursor:pointer;margin-top:var(--space-xs);
+  transition:background-color var(--dur-short) var(--ease-out),
+             border-color var(--dur-short) var(--ease-out),
+             transform 100ms var(--ease-out);
+}
+.btn.pri{background:var(--color-ink);color:var(--color-paper)}
+.btn.pri:hover,.btn.pri.is-hover{background:var(--color-neutral)}
+.btn.sec{background:transparent;color:var(--color-neutral);border-color:var(--color-rule-2)}
+/* hover の合図は 1 つだけ。枠と文字を同時に動かすと「全部光る」ボタンになる */
+.btn.sec:hover,.btn.sec.is-hover{border-color:var(--color-neutral)}
+.btn:active,.btn.is-active{transform:translateY(1px)}
+/* 無効は透明度で表現しない — 文字が読めなくなる。面と文字を別々に落とす */
+.btn:disabled{
+  background:var(--color-paper-3);color:var(--color-muted);
+  border-color:var(--color-rule);cursor:not-allowed;transform:none;
+}
+
+/* ── フォーカスリング：即時に出す。絶対にトランジションしない ── */
+.btn:focus-visible,.pill:focus-visible,.rate button:focus-visible,.escape:focus-visible{
+  outline:2px solid var(--color-focus);
+  outline-offset:2px;
+}
+
+.q{font-size:var(--text-sm);font-weight:600;margin:0 0 var(--space-sm)}
+
+/* ── ピル（プリセット選択） ── */
+.grid{display:flex;flex-wrap:wrap;gap:var(--space-xs)}
+.pill{
+  padding:var(--space-xs) var(--space-sm);
+  border-radius:var(--radius-input);
+  background:var(--color-paper-3);
+  border:var(--rule-hair) solid var(--color-rule);
+  font-family:inherit;font-size:var(--text-sm);color:var(--color-ink);
+  cursor:pointer;flex:1 1 auto;text-align:center;min-width:0;
+  transition:background-color var(--dur-short) var(--ease-out),
+             border-color var(--dur-short) var(--ease-out),
+             color var(--dur-short) var(--ease-out),
+             transform 100ms var(--ease-out);
+}
+.pill:hover,.pill.is-hover{border-color:var(--color-rule-2)}
+.pill:active,.pill.is-active{transform:translateY(1px)}
+.pill[aria-pressed="true"],.pill.on{
+  background:color-mix(in oklch, var(--color-accent) 16%, var(--color-paper-2));
+  border-color:var(--color-accent);
+  color:var(--color-accent);
+  font-weight:600;
+}
+.pill:disabled{
+  background:var(--color-paper-2);color:var(--color-muted);
+  border-color:var(--color-rule);cursor:not-allowed;transform:none;
+}
+/* 横並びの .grid の中でも、縦並びの .board 直下でも同じ見え方になるようにする。
+ * flex:1 1 100% だと列コンテナ直下で flex-grow が効いて縦に伸びてしまう。 */
+.pill--wide{flex:0 0 auto;width:100%;color:var(--color-muted)}
+.pill--num{font-family:var(--font-display);font-variant-numeric:tabular-nums}
+
+/* ── 評価 ── */
+.rate{display:flex;flex-direction:column;gap:var(--space-xs)}
+.rate button{
+  display:flex;align-items:baseline;gap:var(--space-sm);
+  padding:var(--space-sm) var(--space-md);
+  border-radius:var(--radius-input);
+  background:var(--color-paper-3);
+  border:var(--rule-hair) solid var(--color-rule);
+  color:var(--color-ink);font-family:inherit;font-size:var(--text-sm);
+  cursor:pointer;text-align:left;
+  transition:border-color var(--dur-short) var(--ease-out),
+             transform 100ms var(--ease-out);
+}
+.rate button:hover{border-color:var(--color-rule-2)}
+.rate button:active{transform:translateY(1px)}
+.rate button:disabled{
+  background:var(--color-paper-2);color:var(--color-muted);
+  border-color:var(--color-rule);cursor:not-allowed;transform:none;
+}
+.rate button.def{border-color:var(--color-accent)}
+.rate .mark{
+  font-family:var(--font-display);font-size:var(--text-base);
+  width:1.2em;flex:0 0 auto;color:var(--color-neutral);
+}
+.rate small{margin-left:auto;color:var(--color-muted);font-size:var(--text-xs)}
+
+.field{
+  background:var(--color-paper);
+  border:var(--rule-hair) solid var(--color-rule);
+  border-radius:var(--radius-input);
+  padding:var(--space-sm) var(--space-md);
+  font-size:var(--text-sm);color:var(--color-muted);
+}
+
+/* ── 超過画面 ── */
+.banner{
+  font-family:var(--font-display);
+  font-size:var(--text-xs);font-weight:600;
+  letter-spacing:0.16em;color:var(--color-alert);
+  text-align:center;text-transform:uppercase;
+}
+.banner .jp{letter-spacing:0.1em}
+.big{
+  font-family:var(--font-display);
+  font-size:var(--text-2xl);font-weight:700;
+  font-variant-numeric:tabular-nums;letter-spacing:-0.03em;
+  text-align:center;line-height:1.05;
+}
+.big u{font-size:var(--text-sm);font-weight:400;color:var(--color-muted);text-decoration:none}
+.pct{
+  font-family:var(--font-display);
+  font-size:var(--text-md);color:var(--color-alert);
+  text-align:center;font-weight:600;font-variant-numeric:tabular-nums;
+  margin-top:var(--space-2xs);
+}
+.totalbox{
+  background:var(--color-paper-2);
+  border:var(--rule-hair) solid var(--color-rule-2);
+  border-radius:var(--radius-card);
+  padding:var(--space-sm) var(--space-md);
+  text-align:center;margin-top:var(--space-md);
+}
+.totalbox span{
+  font-size:var(--text-2xs);color:var(--color-muted);
+  letter-spacing:0.12em;display:block;text-transform:uppercase;
+  font-family:var(--font-display);
+}
+.totalbox strong{
+  font-family:var(--font-display);
+  font-size:var(--text-xl);font-weight:600;
+  font-variant-numeric:tabular-nums;display:block;
+  margin-top:var(--space-3xs);letter-spacing:-0.02em;
+}
+
+/* 非常口：旧版は 9px・コントラスト 1.6:1 でほぼ不可視だった。
+ * CLAUDE.md が「バグると端末が操作不能になる」と名指しした唯一の安全装置なので、
+ * 見えること・押せることを最優先にする。 */
+.escape{
+  position:absolute;top:var(--space-xs);right:var(--space-xs);
+  display:inline-flex;align-items:center;gap:var(--space-2xs);
+  font-family:var(--font-display);font-size:var(--text-xs);
+  color:var(--color-alert);
+  background:var(--color-alert-ink);
+  border:var(--rule-hair) solid var(--color-alert);
+  border-radius:var(--radius-pill);
+  padding:var(--space-3xs) var(--space-xs);
+  cursor:pointer;z-index:var(--z-raised);
+  transition:background-color var(--dur-short) var(--ease-out);
+}
+.escape:hover{background:color-mix(in oklch, var(--color-alert) 22%, var(--color-alert-ink))}
+.escape:active{transform:translateY(1px)}
+.escape:disabled{
+  color:var(--color-muted);border-color:var(--color-rule);
+  background:var(--color-paper-3);cursor:not-allowed;transform:none;
+}
+
+/* ── 常駐通知 ── */
+.notif{
+  background:var(--color-paper-3);
+  border:var(--rule-hair) solid var(--color-rule);
+  border-radius:var(--radius-card);
+  padding:var(--space-md);
+}
+.notif .hd{
+  display:flex;justify-content:space-between;
+  font-family:var(--font-display);font-size:var(--text-xs);
+  color:var(--color-muted);margin-bottom:var(--space-xs);
+  font-variant-numeric:tabular-nums;
+}
+.notif .ttl{font-size:var(--text-sm);font-weight:600}
+.notif .ln{font-size:var(--text-xs);color:var(--color-muted);margin-top:var(--space-3xs)}
+.notif .act{
+  margin-top:var(--space-sm);padding-top:var(--space-xs);
+  border-top:var(--rule-hair) solid var(--color-rule);
+  font-size:var(--text-sm);color:var(--color-accent);font-weight:600;
+}
+.wall{
+  margin-top:var(--space-md);
+  border:var(--rule-hair) dashed var(--color-rule-2);
+  border-radius:var(--radius-card);
+  padding:var(--space-lg) var(--space-md);
+  font-size:var(--text-sm);color:var(--color-muted);line-height:1.7;
+}
+.wall b{display:block;color:var(--color-ink);font-weight:600;margin-bottom:var(--space-2xs)}
+
+/* ── 履歴 ── */
+.hd2{
+  display:flex;justify-content:space-between;align-items:baseline;
+  margin:var(--space-md) 0 var(--space-xs);
+}
+.hd2 b{font-size:var(--text-sm);font-weight:600}
+.hd2 span{
+  font-size:var(--text-xs);color:var(--color-muted);
+  font-family:var(--font-display);font-variant-numeric:tabular-nums;
+}
+.stack{
+  height:4px;border-radius:var(--radius-pill);overflow:hidden;
+  display:flex;margin-bottom:var(--space-sm);
+}
+.row{
+  display:flex;gap:var(--space-sm);align-items:center;
+  padding:var(--space-xs) 0;
+  border-bottom:var(--rule-hair) solid var(--color-rule);
+  font-size:var(--text-sm);
+}
+.row .tm{
+  color:var(--color-muted);font-size:var(--text-xs);
+  width:42px;flex:0 0 auto;
+  font-family:var(--font-display);font-variant-numeric:tabular-nums;
+}
+.row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .du{
+  color:var(--color-neutral);font-size:var(--text-xs);
+  font-family:var(--font-display);font-variant-numeric:tabular-nums;
+}
+.row .rt{font-family:var(--font-display);color:var(--color-neutral);width:1.2em;text-align:center}
+.row .ext{
+  font-family:var(--font-display);font-size:var(--text-xs);
+  color:var(--color-alert);
+}
+.dot{width:6px;height:6px;border-radius:var(--radius-pill);flex:0 0 auto}
+
+/* ── 注記カード（超過画面の横に置く解説列） ── */
+/* 片側だけ太い色付き罫を引く「side-stripe card」は 2018 年 SaaS の型で、
+ * いまは AI が作った顔に見える。全周をヘアラインにして、
+ * 見出しの脇に小さなアクセントの四角を置くほうに替えた。 */
+.aside{
+  background:var(--color-paper-2);
+  border:var(--rule-hair) solid var(--color-rule);
+  border-radius:var(--radius-card);
+  padding:var(--space-md);
+  font-size:var(--text-sm);color:var(--color-muted);
+  align-self:flex-start;
+}
+.aside h3{
+  display:flex;align-items:center;gap:var(--space-xs);
+  font-size:var(--text-sm);color:var(--color-ink);
+  margin:0 0 var(--space-xs);font-weight:600;
+}
+.aside h3::before{
+  content:"";width:5px;height:5px;flex:0 0 auto;
+  background:var(--color-accent);
+}
+.aside h3 + h3,.aside p + h3{margin-top:var(--space-md)}
+.aside p{margin:0 0 var(--space-sm)}
+.aside p:last-child{margin-bottom:0}
+.aside code{
+  font-family:var(--font-display);font-size:var(--text-xs);
+  background:var(--color-paper-3);color:var(--color-ink);
+  padding:var(--space-3xs) var(--space-2xs);border-radius:var(--radius-input);
+}
+
+@media (max-width:520px){
+  .slot,.slot--note{width:min(360px, calc(100vw - var(--space-xl)))}
+}
+
+@media (prefers-reduced-motion: reduce){
+  *{transition-duration:1ms !important;animation-duration:1ms !important}
+  .btn:active,.pill:active,.rate button:active{transform:none}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" aria-hidden="true" style="position:absolute">
+  <symbol id="mk-goal" viewBox="0 0 12 12">
+    <circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+    <path d="M6 0.5v2.2M6 9.3v2.2M0.5 6h2.2M9.3 6h2.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <h1>TaskTimer — 画面設計</h1>
+    <p>
+      情報設計は <strong>docs/01_SPEC.md</strong> が正典。この文書はその見え方と操作の層を定める。<br>
+      板の幅 360px は Pixel 9a の論理幅（約 360dp）に合わせた実寸。<strong>超過画面の延長ピルは実際に動く</strong>ので、
+      押して「合計所要時間」の 1 か所だけが変わることを確かめてほしい。
+    </p>
+  </header>
+
+  <!-- ══ 帯 A ══════════════════════════════════════════════ -->
+  <section class="band">
+    <div class="band__head">
+      <h2>計測する</h2>
+      <p>ホーム画面の 2 状態。進行中と超過で、変わるのは色と進捗バーだけ。</p>
+    </div>
+    <div class="rail">
+
+      <div class="slot">
+        <p class="cap"><b>進行中</b> — 予定の内側</p>
+        <div class="board">
+          <span class="chip c-job">Job Hunting</span>
+          <div class="task">ES執筆</div>
+          <p class="goal"><svg width="12" height="12" aria-hidden="true"><use href="#mk-goal"/></svg>A社のガクチカを書き切る</p>
+          <div class="elapsed">23:41</div>
+          <div class="meta">予定 45分 <span>/</span> 残り 21分</div>
+          <div class="bar"><i style="width:53%"></i></div>
+          <div class="spacer"></div>
+          <button class="btn pri" type="button">タスクを切り替える</button>
+          <button class="btn sec" type="button">中断（記録して停止）</button>
+        </div>
+        <p class="note">経過時間が主役、残り時間は副。<b>何分やったかが記録の本体</b>だから。</p>
+      </div>
+
+      <div class="slot">
+        <p class="cap"><b>進行中</b> — 超過</p>
+        <div class="board">
+          <span class="chip c-job">Job Hunting</span>
+          <div class="task">ES執筆</div>
+          <p class="goal"><svg width="12" height="12" aria-hidden="true"><use href="#mk-goal"/></svg>A社のガクチカを書き切る</p>
+          <div class="elapsed over">47:12</div>
+          <div class="meta over">予定 45分 <span>/</span> <b>2分 超過</b></div>
+          <div class="bar"><i style="width:95%"></i><i class="ov" style="width:5%"></i></div>
+          <div class="spacer"></div>
+          <button class="btn pri" type="button">タスクを切り替える</button>
+          <button class="btn sec" type="button">中断（記録して停止）</button>
+        </div>
+        <p class="note">
+          超過すると数字が<span class="hot">警報色</span>になる。バーは 100% を超えた分だけ色が変わる
+          （47:12 経過・予定 45:00 なので <b>95 / 5</b>）。
+        </p>
+      </div>
+
+      <div class="slot slot--note">
+        <p class="cap"><b>色の使い分け</b></p>
+        <div class="aside">
+          <h3>彩度で伝達路を分ける</h3>
+          <p>タグ 6 色は仕様で Notion と同一に固定されている。色相環が先約済みなので、
+             アクセントと警告を色相で作ると必ず衝突する。</p>
+          <p><b>落ち着いた色＝分類</b>（タグ）、<b>熱い色＝警報</b>（超過）、<code>hue 200</code> の水色＝操作。
+             画面内で高彩度を持てるのは超過だけ。</p>
+          <p>旧版は <code>--accent</code> と Hobby、<code>--danger</code> と Job Hunting が同一値だった。</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══ 帯 B ══════════════════════════════════════════════ -->
+  <section class="band">
+    <div class="band__head">
+      <h2>超過して、選ばされる</h2>
+      <p>アプリの心臓部。ここから評価 → 次のタスクへ、切れ目なく続く。</p>
+    </div>
+    <div class="rail">
+
+      <div class="slot">
+        <p class="cap"><b>超過画面</b> — 操作できます</p>
+        <div class="board board--alert">
+          <button class="escape" type="button">長押し3秒 · 非常口</button>
+          <p class="banner">予定時間を<span class="jp">超過</span></p>
+          <p class="goal goal--center" style="margin-top:var(--space-lg)">
+            <svg width="12" height="12" aria-hidden="true"><use href="#mk-goal"/></svg>A社のガクチカを書き切る
+          </p>
+          <div class="rule"></div>
+          <div class="big">47<u> 分</u></div>
+          <div class="meta">予定 45分</div>
+          <div class="pct">104%</div>
+          <div class="rule"></div>
+          <p class="q">あと何分やる？</p>
+          <div class="grid" id="exts">
+            <button class="pill pill--num" type="button" aria-pressed="false" data-m="5">+5</button>
+            <button class="pill pill--num" type="button" aria-pressed="false" data-m="10">+10</button>
+            <button class="pill pill--num" type="button" aria-pressed="false" data-m="15">+15</button>
+            <button class="pill pill--num" type="button" aria-pressed="false" data-m="30">+30</button>
+          </div>
+          <div class="totalbox">
+            <span>合計所要時間</span>
+            <strong id="total" aria-live="polite">—</strong>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn pri" id="ext" type="button" disabled>延長する</button>
+          <button class="btn sec" type="button">タスクを終える</button>
+        </div>
+        <p class="note">
+          延長ピルは<b>選ぶだけ</b>で実行しない。各ボタンに数字を併記せず、合計は 1 か所に集約する。
+        </p>
+      </div>
+
+      <div class="slot slot--note">
+        <p class="cap"><b>この画面の理屈</b></p>
+        <div class="aside">
+          <h3>合計を 1 か所に集約する理由</h3>
+          <p>各ピルに「計 52分」「計 57分」と併記すると、視線が 4 か所に散って比較にならない。
+             1 か所だけが書き換わると、<b>「+30 を選んだら計 77 分か。さすがに長い」</b>という判断が起きる。</p>
+          <h3>超過率の分母</h3>
+          <p><code>plannedMinutes</code>（当初の見積もり 45 分）であって <code>totalPlannedMinutes</code> ではない。
+             <b>測りたいのは見積もりの精度</b>なので、延長で分母を膨らませては意味がない。150% 超で警報色。</p>
+          <h3>非常口</h3>
+          <p>旧版は 9px・コントラスト 1.6:1 でほぼ見えなかった。ここは端末が操作不能になる事故を
+             防ぐ唯一の装置なので、<b>見えることを最優先</b>にした。</p>
+        </div>
+      </div>
+
+      <div class="slot">
+        <p class="cap"><b>切り替え Step 1</b> — 評価</p>
+        <div class="board">
+          <span class="chip c-job">Job Hunting</span>
+          <div class="task">ES執筆</div>
+          <div class="rule"></div>
+          <div style="text-align:center;margin-bottom:var(--space-lg)">
+            <div class="totalbox" style="margin-top:0;background:transparent;border:0;padding:0">
+              <span>経過時間</span>
+              <strong>1:12:00</strong>
+            </div>
+            <div class="meta over" style="margin:var(--space-2xs) 0 0">予定 45分 / 160%</div>
+          </div>
+          <p class="q">この時間の使い方は？</p>
+          <div class="rate">
+            <button type="button"><span class="mark">◯</span>良かった<small>理由を入力</small></button>
+            <button type="button" class="def"><span class="mark">△</span>普通<small>デフォルト</small></button>
+            <button type="button"><span class="mark">✕</span>悪かった<small>理由を入力</small></button>
+          </div>
+          <div class="spacer"></div>
+        </div>
+        <p class="note">必ず経過時間を見せてから評価させる。既存の MacroDroid 運用を踏襲。</p>
+      </div>
+
+      <div class="slot">
+        <p class="cap"><b>切り替え Step 2</b> — 次のタスク</p>
+        <div class="board">
+          <p class="q">次は何をする？</p>
+          <div class="grid">
+            <button class="pill" type="button">ES執筆</button>
+            <button class="pill" type="button">講義</button>
+            <button class="pill" type="button">Sleep</button>
+            <button class="pill" type="button">筋トレ</button>
+            <button class="pill" type="button">移動</button>
+            <button class="pill" type="button">昼食</button>
+            <button class="pill" type="button">Notion整理</button>
+            <button class="pill" type="button">風呂</button>
+          </div>
+          <div class="rule"></div>
+          <button class="pill pill--wide" type="button">＋ 新しいタスク…</button>
+          <div class="spacer"></div>
+          <p class="note" style="margin:0">
+            使用頻度順に自動で並び替わる。<b>スクロールなしで 8 個</b>が一目に入る密度。
+          </p>
+        </div>
+        <p class="note">プリセットを選ぶと、前回のタグ・ゴール・予定時間が次の画面にプリフィルされる。</p>
+      </div>
+
+      <div class="slot">
+        <p class="cap"><b>切り替え Step 3・4</b> — ゴールと予定時間</p>
+        <div class="board">
+          <span class="chip c-uni">Uni Study</span>
+          <div class="task">講義</div>
+          <div class="rule"></div>
+          <p class="q">ゴールは？</p>
+          <div class="field">統計の課題を提出まで終わらせる</div>
+          <div class="rule"></div>
+          <p class="q">何分でやる？</p>
+          <div class="grid">
+            <button class="pill pill--num" type="button">15</button>
+            <button class="pill pill--num" type="button">25</button>
+            <button class="pill pill--num on" type="button" aria-pressed="true">30</button>
+            <button class="pill pill--num" type="button">45</button>
+            <button class="pill pill--num" type="button">60</button>
+            <button class="pill pill--num" type="button">90</button>
+            <button class="pill pill--num" type="button">120</button>
+          </div>
+          <div class="field" style="margin-top:var(--space-xs)">自由入力 ___ 分</div>
+          <div class="spacer"></div>
+          <button class="btn pri" type="button">開始する</button>
+        </div>
+        <p class="note">ここまで最短 4 タップ。<b>切り替えの摩擦を最小にすることが継続の条件。</b></p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══ 帯 C ══════════════════════════════════════════════ -->
+  <section class="band">
+    <div class="band__head">
+      <h2>残す</h2>
+      <p>常駐通知・オーバーレイによるブロック・履歴。逃げ場をなくす仕掛けと、その結果。</p>
+    </div>
+    <div class="rail">
+
+      <div class="slot">
+        <p class="cap"><b>常駐通知</b>とオーバーレイ</p>
+        <div class="board">
+          <div class="notif">
+            <div class="hd"><span>TaskTimer</span><span>23:41</span></div>
+            <div class="ttl">ES執筆 · Job Hunting</div>
+            <div class="ln">A社のガクチカを書き切る</div>
+            <div class="ln">予定 45分 / 残り 21分</div>
+            <div class="act">切り替え</div>
+          </div>
+          <p class="note" style="margin-top:var(--space-sm)">
+            セッション中ずっと表示。スワイプで消せない。「切り替え」から直接フローを開ける。
+          </p>
+          <div class="rule"></div>
+          <div class="wall">
+            <b>超過中にホームボタンを押しても</b>
+            オーバーレイが画面を覆って引き戻す。オーバーレイはホーム画面の上にも残るので、
+            これが実質的な「逃げ場なし」の正体になる。
+          </div>
+          <div class="spacer"></div>
+        </div>
+        <p class="note">
+          権限がない・例外が出た場合はオーバーレイなしで続行する。<b>クラッシュさせない。</b>
+        </p>
+      </div>
+
+      <div class="slot">
+        <p class="cap"><b>履歴</b></p>
+        <div class="board">
+          <p class="q">履歴</p>
+          <div class="hd2"><b>7月29日（水）</b><span>計 15:20</span></div>
+          <div class="stack">
+            <i style="width:33%;background:var(--tag-sleep)"></i>
+            <i style="width:26%;background:var(--tag-job)"></i>
+            <i style="width:18%;background:var(--tag-uni)"></i>
+            <i style="width:13%;background:var(--tag-hobby)"></i>
+            <i style="width:10%;background:var(--tag-chore)"></i>
+          </div>
+          <div class="row"><span class="tm">21:30</span><span class="dot" style="background:var(--tag-hobby)"></span><span class="nm">読書</span><span class="du">1:40</span><span class="rt">◯</span></div>
+          <div class="row"><span class="tm">19:00</span><span class="dot" style="background:var(--tag-chore)"></span><span class="nm">夕食・皿洗い</span><span class="du">0:50</span><span class="rt">△</span></div>
+          <div class="row"><span class="tm">15:36</span><span class="dot" style="background:var(--tag-uni)"></span><span class="nm">講義</span><span class="du">2:45</span><span class="rt">◯</span></div>
+          <div class="row"><span class="tm">14:23</span><span class="dot" style="background:var(--tag-job)"></span><span class="nm">ES執筆 <span class="ext">↑2</span></span><span class="du">1:12</span><span class="rt">✕</span></div>
+          <div class="row"><span class="tm">07:00</span><span class="dot" style="background:var(--tag-sleep)"></span><span class="nm">Sleep</span><span class="du">7:00</span><span class="rt">◯</span></div>
+          <div class="hd2"><b>7月28日（火）</b><span>計 14:05</span></div>
+          <div class="stack">
+            <i style="width:31%;background:var(--tag-sleep)"></i>
+            <i style="width:34%;background:var(--tag-uni)"></i>
+            <i style="width:21%;background:var(--tag-job)"></i>
+            <i style="width:14%;background:var(--tag-self)"></i>
+          </div>
+          <div class="spacer"></div>
+        </div>
+        <p class="note">
+          <span class="hot">↑2</span> は延長 2 回。日をまたぐ Sleep は DB では 1 レコードのまま、
+          <b>表示時に日境界で按分</b>する（<code>DailyAggregator.splitByDay()</code>）。
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+
+<script>
+  // 超過画面：延長プリセットは「選択」するだけ。合計所要時間の 1 か所だけが書き換わる。
+  var ELAPSED = 47; // 現在の経過分数
+  var pills   = document.querySelectorAll('#exts .pill');
+  var total   = document.getElementById('total');
+  var extBtn  = document.getElementById('ext');
+
+  pills.forEach(function (p) {
+    p.addEventListener('click', function () {
+      var already = p.getAttribute('aria-pressed') === 'true';
+      pills.forEach(function (q) { q.setAttribute('aria-pressed', 'false'); });
+
+      if (already) {              // 同じピルをもう一度押したら選択解除
+        total.textContent = '—';
+        extBtn.disabled = true;
+        return;
+      }
+      p.setAttribute('aria-pressed', 'true');
+      total.textContent = (ELAPSED + parseInt(p.dataset.m, 10)) + '分';
+      extBtn.disabled = false;
+    });
+  });
+</script>
+
+</body>
+</html>
