@@ -27,8 +27,9 @@ composeBom = "2026.06.00"
 # AAR のメタデータ（minCompileSdk）で確認済み：
 #   core-ktx      1.19.0 -> 37 ✕ / 1.18.0 -> 36 ✅
 #   lifecycle     2.11.0 -> 37 ✕ / 2.10.0 -> 35 ✅
-#     ※ lifecycle はグループ内でバージョンが揃えられるため、直接使っていない
-#        lifecycle-runtime-compose まで一緒に上がって compileSdk 37 を要求してくる
+#     ※ lifecycle はグループ内でバージョンが揃えられるので、下の
+#        lifecycle-runtime-compose / viewmodel-compose も必ず同じ番号になる。
+#        1 つでも 2.11.0 に上げると全部つられて compileSdk 37 を要求してくる
 #   activity-compose 1.13.0 -> 36 ✅
 androidxCore = "1.18.0"
 androidxLifecycle = "2.10.0"
@@ -39,6 +40,11 @@ junit = "4.13.2"
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidxCore" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "androidxLifecycle" }
+# Compose から ViewModel を取る viewModel() と、画面が背面に回ったら購読を止める
+# collectAsStateWithLifecycle() のため（Phase 2）。経過時間の毎秒更新を
+# 裏で回し続けないために後者が要る。
+androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "androidxLifecycle" }
+androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "androidxLifecycle" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidxActivity" }
 
 # BOM。これを platform() で入れると以下の compose 系はバージョン指定不要になる。

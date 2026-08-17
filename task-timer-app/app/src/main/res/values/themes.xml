@@ -4,6 +4,6 @@
          DayNight ではなく Material（＝ダーク）固定にしているのは、
          端末がライトテーマでもこのアプリだけは常に暗くするため。 -->
     <style name="Theme.TaskTimer" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/ink</item>
+        <item name="android:windowBackground">@color/paper</item>
     </style>
 </resources>

@@ -9,24 +9,29 @@ import androidx.compose.runtime.Composable
 // Dynamic Color も使わない。壁紙によって超過時の警告色が沈むと困るため。
 private val TaskTimerColorScheme = darkColorScheme(
     primary = Accent,
-    onPrimary = OnAccent,
-    secondary = OnInkMuted,
-    onSecondary = Ink,
-    error = Warn,
-    onError = OnWarn,
-    background = Ink,
-    onBackground = OnInk,
-    surface = InkElevated,
-    onSurface = OnInk,
-    surfaceVariant = InkVariant,
-    onSurfaceVariant = OnInkMuted,
-    outline = Outline,
+    onPrimary = AccentInk,
+    secondary = Neutral,
+    onSecondary = Paper,
+    // error は Material のダイアログやテキスト欄が勝手に使うので、警報色を割り当てておく。
+    // ただし超過表示で Alert を使うときは colorScheme 経由ではなく直接指定する
+    // （「エラー」ではなく「計測データ」なので、意味の通り道を分けておきたい）。
+    error = Alert,
+    onError = AlertInk,
+    background = Paper,
+    onBackground = Ink,
+    surface = Paper2,
+    onSurface = Ink,
+    surfaceVariant = Paper3,
+    onSurfaceVariant = Muted,
+    outline = Rule,
+    outlineVariant = Rule2,
 )
 
 @Composable
 fun TaskTimerTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = TaskTimerColorScheme,
+        typography = TaskTimerTypography,
         content = content,
     )
 }
