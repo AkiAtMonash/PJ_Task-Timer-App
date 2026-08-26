@@ -6,15 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import com.aki.tasktimer.ui.navigation.TaskTimerNavHost
 import com.aki.tasktimer.ui.theme.TaskTimerTheme
 
 class MainActivity : ComponentActivity() {
@@ -31,25 +23,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TaskTimerTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    PlaceholderScreen(modifier = Modifier.padding(innerPadding))
-                }
+                TaskTimerNavHost()
             }
         }
-    }
-}
-
-// Phase 0 のビルド疎通確認用。Phase 2 で HomeScreen に置き換える。
-@Composable
-private fun PlaceholderScreen(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "TaskTimer",
-            style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
     }
 }
