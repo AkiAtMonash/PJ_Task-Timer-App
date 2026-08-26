@@ -21,6 +21,7 @@ private val TaskTimerColorScheme = darkColorScheme(
     surfaceVariant = InkVariant,
     onSurfaceVariant = OnInkMuted,
     outline = Outline,
+    outlineVariant = OutlineStrong,
 )
 
 @Composable

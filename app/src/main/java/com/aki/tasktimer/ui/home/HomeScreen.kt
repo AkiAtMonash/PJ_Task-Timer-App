@@ -33,12 +33,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aki.tasktimer.TaskTimerApp
 import com.aki.tasktimer.data.model.Session
+import com.aki.tasktimer.domain.ProgressSplit
 import com.aki.tasktimer.domain.elapsedMinutes
+import com.aki.tasktimer.domain.formatDurationMinutes
+import com.aki.tasktimer.domain.isOverrun
+import com.aki.tasktimer.domain.progressSplit
+import com.aki.tasktimer.domain.remainingMinutes
 import com.aki.tasktimer.ui.component.PrimaryButton
 import com.aki.tasktimer.ui.component.SecondaryButton
 import com.aki.tasktimer.ui.component.TagChip
 import com.aki.tasktimer.ui.component.ratingSymbol
 import com.aki.tasktimer.ui.theme.InkVariant
+import com.aki.tasktimer.ui.theme.Neutral
 import com.aki.tasktimer.ui.theme.OnInk
 import com.aki.tasktimer.ui.theme.OnInkMuted
 import com.aki.tasktimer.ui.theme.Warn
@@ -86,10 +92,12 @@ private fun RunningHome(
     onInterrupt: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val elapsed = elapsedMinutes(session.startedAt, now)
     val planned = session.totalPlannedMinutes
-    val remaining = planned - elapsed
-    val isOver = remaining < 0
+    // planned - elapsedMinutes(...) だと 1 分ずれる（23 分 41 秒経過で「残り 22 分」になる）。
+    // 経過ではなく残りのほうを丸めるのが正しい。domain 側に切り出してテストで固定してある
+    val remaining = remainingMinutes(session.startedAt, now, planned)
+    // 符号で超過を判定すると、45:00〜45:59 が「残り 0 分」のままで警報色にならない
+    val isOver = isOverrun(session.startedAt, now, planned)
 
     Column(
         modifier = modifier
@@ -136,8 +144,7 @@ private fun RunningHome(
         )
 
         ProgressBar(
-            elapsed = elapsed,
-            planned = planned,
+            split = progressSplit(session.startedAt, now, planned),
             modifier = Modifier.fillMaxWidth(),
         )
 
@@ -182,36 +189,43 @@ private fun GoalMarker(modifier: Modifier = Modifier, color: Color = OnInkMuted)
 }
 
 /**
- * 進捗バー。ワイヤーフレームの 53%（予定内）／ 95-5（超過）を再現する。
- * total = max(elapsed, planned) とし、中立部分と超過部分を合計 1.0 になるよう按分する。
+ * 進捗バー。塗り分けの比率は domain の [progressSplit] が決める（テスト済み）。
+ * ここは受け取った比率を並べるだけ。
+ *
+ * **weight を使うこと。** 以前は Row の中で fillMaxWidth(比率) を 2 つ並べていたが、
+ * Row は非 weight の子を「残り幅」で測るので、2 つ目の警報色は
+ * over × (全幅 − 中立部分) になってしまい、47 分 / 予定 45 分でほぼ見えない太さになる。
  */
 @Composable
-private fun ProgressBar(elapsed: Int, planned: Int, modifier: Modifier = Modifier) {
-    val total = maxOf(elapsed, planned)
-    val neutral = if (total == 0) 0f else minOf(elapsed, planned).toFloat() / total
-    val over = if (total == 0) 0f else maxOf(0, elapsed - planned).toFloat() / total
+private fun ProgressBar(split: ProgressSplit, modifier: Modifier = Modifier) {
+    val remainder = 1f - split.base - split.over
 
-    Box(
+    Row(
         modifier = modifier
             .height(4.dp)
             .clip(RoundedCornerShape(999.dp))
             .background(InkVariant),
     ) {
-        Row(modifier = Modifier.fillMaxHeight()) {
+        // weight は 0 を受け付けないので、それぞれ出番があるときだけ置く
+        if (split.base > 0f) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(neutral)
+                    .weight(split.base)
                     .fillMaxHeight()
-                    .background(OnInk),
+                    // 主テキストと同じ明るさだと、バーが数字と同じ強さで主張してしまう
+                    .background(Neutral),
             )
-            if (over > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(over)
-                        .fillMaxHeight()
-                        .background(Warn),
-                )
-            }
+        }
+        if (split.over > 0f) {
+            Box(
+                modifier = Modifier
+                    .weight(split.over)
+                    .fillMaxHeight()
+                    .background(Warn),
+            )
+        }
+        if (remainder > 0f) {
+            Spacer(modifier = Modifier.weight(remainder))
         }
     }
 }
@@ -271,7 +285,8 @@ private fun LastRecordCard(lastFinished: Session, modifier: Modifier = Modifier)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "${durationMinutes}分",
+                // 480 分ではなく「8時間」と出す。分のままだと一目で長さが掴めない
+                text = formatDurationMinutes(durationMinutes),
                 color = OnInkMuted,
                 fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace,

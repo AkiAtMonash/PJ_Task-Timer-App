@@ -2,6 +2,6 @@
 <resources>
     <!-- Compose 側の Ink と同じ値。Compose が描き始める前の一瞬（windowBackground）で
          白くフラッシュさせないために XML 側にも持たせている。 -->
-    <color name="ink">#FF101114</color>
-    <color name="ic_launcher_background">#FF101114</color>
+    <color name="ink">#FF060A0E</color>
+    <color name="ic_launcher_background">#FF060A0E</color>
 </resources>

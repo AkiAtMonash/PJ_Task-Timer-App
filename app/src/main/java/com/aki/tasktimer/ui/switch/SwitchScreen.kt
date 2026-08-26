@@ -47,7 +47,6 @@ import com.aki.tasktimer.domain.overrunRate
 import com.aki.tasktimer.ui.component.Pill
 import com.aki.tasktimer.ui.component.PrimaryButton
 import com.aki.tasktimer.ui.component.RatingSelector
-import com.aki.tasktimer.ui.component.SecondaryButton
 import com.aki.tasktimer.ui.component.TagChip
 import com.aki.tasktimer.ui.theme.InkVariant
 import com.aki.tasktimer.ui.theme.OnInk
@@ -90,8 +89,7 @@ fun SwitchScreen(
             when (uiState.step) {
                 SwitchStep.RATING -> RatingStep(uiState, viewModel)
                 SwitchStep.NAME -> TaskNameStep(uiState, viewModel)
-                SwitchStep.GOAL -> GoalStep(uiState, viewModel)
-                SwitchStep.PLANNED -> PlannedTimeStep(uiState, viewModel)
+                SwitchStep.GOAL_AND_TIME -> GoalAndTimeStep(uiState, viewModel)
             }
         }
     }
@@ -254,56 +252,16 @@ private fun TaskNameStep(state: SwitchUiState, viewModel: SwitchViewModel) {
     }
 }
 
-@Composable
-private fun GoalStep(state: SwitchUiState, viewModel: SwitchViewModel) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        state.draft.tag?.let { TagChip(tag = it) }
-        Text(
-            text = state.draft.name,
-            color = OnInk,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "ゴールは？",
-            color = OnInk,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
-            value = state.draft.goal,
-            onValueChange = viewModel::setGoal,
-            placeholder = { Text("（省略可）") },
-            singleLine = false,
-            minLines = 2,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        Row {
-            SecondaryButton(
-                text = "スキップ",
-                onClick = viewModel::skipGoal,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            PrimaryButton(
-                text = "次へ",
-                onClick = viewModel::confirmGoal,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-}
-
+/**
+ * Step 3：ゴールと予定時間（docs/01_SPEC.md 4.3 / mockups/wireframe.html）。
+ *
+ * **2 画面に分けないこと。** 分けると「スキップ／次へ」で 1 タップ増え、
+ * 仕様書が要求する「最短 4 タップ」を満たせなくなる。
+ * この画面での最短は、プリセットの予定時間をそのまま使って「開始する」の 1 タップ。
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PlannedTimeStep(state: SwitchUiState, viewModel: SwitchViewModel) {
+private fun GoalAndTimeStep(state: SwitchUiState, viewModel: SwitchViewModel) {
     val canStart = (state.draft.plannedMinutes ?: 0) > 0 && !state.isSaving
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -317,6 +275,29 @@ private fun PlannedTimeStep(state: SwitchUiState, viewModel: SwitchViewModel) {
         )
         Spacer(modifier = Modifier.height(24.dp))
 
+        // ── ゴール ──
+        Text(
+            text = "ゴールは？",
+            color = OnInk,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedTextField(
+            value = state.draft.goal,
+            onValueChange = viewModel::setGoal,
+            // 前回のゴールは薄字で見せるだけ。本文に入れると毎回消す手間が増える
+            placeholder = {
+                Text(state.draft.goalPlaceholder.ifEmpty { "（空でもよい）" })
+            },
+            singleLine = false,
+            minLines = 2,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // ── 予定時間 ──
         Text(
             text = "何分でやる？",
             color = OnInk,

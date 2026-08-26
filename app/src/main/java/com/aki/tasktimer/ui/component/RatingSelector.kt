@@ -17,7 +17,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aki.tasktimer.data.model.Rating
@@ -27,7 +26,22 @@ import com.aki.tasktimer.ui.theme.OnInk
 import com.aki.tasktimer.ui.theme.OnInkMuted
 import com.aki.tasktimer.ui.theme.Outline
 
-/** ◯/△/✕ の記号。履歴やホームの「最後の記録」でも使う。 */
+/**
+ * 評価の記号。**選ばせるときと振り返るときで別の記号を使う**（Aki の決定）。
+ *
+ * 選択ボタンは絵文字。色と形があるぶん、押す前に「どれを押すか」が一瞬で決まる。
+ * 一覧はモノクロの記号。履歴を上から眺めるときに絵文字が並ぶと視線が奪われて、
+ * 肝心の時間の数字が読めなくなる。
+ */
+
+/** 選択ボタン用（Step 1）。 */
+fun ratingChoiceSymbol(rating: Rating): String = when (rating) {
+    Rating.GOOD -> "✅"
+    Rating.NORMAL -> "🫳"
+    Rating.BAD -> "❌"
+}
+
+/** 一覧・振り返り用（ホームの「最後の記録」、Phase 6 の履歴）。 */
 fun ratingSymbol(rating: Rating): String = when (rating) {
     Rating.GOOD -> "◯"
     Rating.NORMAL -> "△"
@@ -50,7 +64,7 @@ private val RATING_OPTIONS = listOf(
 )
 
 /**
- * Step 1 の ◯/△/✕ 3 択（docs/01_SPEC.md 4.3 Step 1）。
+ * Step 1 の ✅/🫳/❌ 3 択（docs/01_SPEC.md 4.3 Step 1）。
  * デフォルトは △（普通）。選択中は操作色の罫線が付く。
  */
 @Composable
@@ -92,10 +106,9 @@ private fun RatingRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = ratingSymbol(option.rating),
-            color = OnInk,
+            // 一覧の ◯△✕ ではなく絵文字。ここは「選ぶ」場面なので形と色があるほうが速い
+            text = ratingChoiceSymbol(option.rating),
             fontSize = 16.sp,
-            fontFamily = FontFamily.Monospace,
         )
         Spacer(modifier = Modifier.width(12.dp))
         Text(

@@ -7,17 +7,17 @@ class DurationFormatTest {
 
     @Test
     fun `0 ミリ秒は 0 分 0 秒`() {
-        assertEquals("0:00", formatElapsed(0L))
+        assertEquals("00:00", formatElapsed(0L))
     }
 
     @Test
     fun `59 秒は 0 分 59 秒`() {
-        assertEquals("0:59", formatElapsed(59_000L))
+        assertEquals("00:59", formatElapsed(59_000L))
     }
 
     @Test
     fun `60 秒は 1 分 0 秒`() {
-        assertEquals("1:00", formatElapsed(60_000L))
+        assertEquals("01:00", formatElapsed(60_000L))
     }
 
     @Test
@@ -37,6 +37,12 @@ class DurationFormatTest {
 
     @Test
     fun `負値は 0 分 0 秒に丸める`() {
-        assertEquals("0:00", formatElapsed(-1L))
+        assertEquals("00:00", formatElapsed(-1L))
+    }
+
+    @Test
+    fun `10 分をまたいでも桁数が変わらない（横ずれ防止）`() {
+        assertEquals("09:59", formatElapsed(599_000L))
+        assertEquals("10:00", formatElapsed(600_000L))
     }
 }

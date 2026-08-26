@@ -14,8 +14,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** 切り替えフローの 4 ステップ（docs/01_SPEC.md 4.3）。 */
-enum class SwitchStep { RATING, NAME, GOAL, PLANNED }
+/**
+ * 切り替えフローのステップ。
+ *
+ * 仕様書の ASCII 図はゴールと予定時間が別画面だが、それだと
+ * 評価 1 + プリセット 1 + スキップ 1 + 予定時間 1 + 開始 1 = **5 タップ**になり、
+ * 仕様書自身が要求する「最短 4 タップ」（docs/01_SPEC.md 4.3）を満たせない。
+ * mockups/wireframe.html は「切り替え Step 3・4」として 1 画面にまとめており、
+ * そちらがちょうど 4 タップになるので、モックアップを正とする（Aki の決定）。
+ */
+enum class SwitchStep { RATING, NAME, GOAL_AND_TIME }
 
 /**
  * フローの目的。切り替え（次のタスクを開始）か中断（記録して停止）か。
@@ -28,6 +36,11 @@ data class TaskDraft(
     val name: String = "",
     val tag: Tag? = null,
     val goal: String = "",
+    /**
+     * 前回のゴール。**薄字で見せるだけで本文には入れない**（docs/01_SPEC.md 4.3 Step 3）。
+     * 本文に入れると、違うことをやるときに毎回消す手間が増える。
+     */
+    val goalPlaceholder: String = "",
     val plannedMinutes: Int? = null,
 )
 
@@ -116,10 +129,11 @@ class SwitchViewModel(
                 draft = TaskDraft(
                     name = preset.name,
                     tag = preset.tag,
-                    goal = preset.lastGoal ?: "",
+                    goal = "",
+                    goalPlaceholder = preset.lastGoal.orEmpty(),
                     plannedMinutes = preset.lastPlannedMinutes,
                 ),
-                step = SwitchStep.GOAL,
+                step = SwitchStep.GOAL_AND_TIME,
             )
         }
     }
@@ -145,30 +159,18 @@ class SwitchViewModel(
             it.copy(
                 draft = it.draft.copy(tag = tag),
                 showTagPicker = false,
-                step = SwitchStep.GOAL,
+                step = SwitchStep.GOAL_AND_TIME,
             )
         }
     }
 
     fun dismissTagPicker() = _uiState.update { it.copy(showTagPicker = false) }
 
-    // ---- Step 3（ゴール） ----
+    // ---- Step 3（ゴールと予定時間・同じ画面） ----
 
+    // ゴールは空のままでも開始できる（docs/01_SPEC.md 4.3 Step 3）。
+    // 「スキップ」ボタンが要らないのは、同じ画面に「開始する」があるから
     fun setGoal(goal: String) = _uiState.update { it.copy(draft = it.draft.copy(goal = goal)) }
-
-    fun confirmGoal() {
-        _uiState.update {
-            it.copy(draft = it.draft.copy(goal = it.draft.goal.trim()), step = SwitchStep.PLANNED)
-        }
-    }
-
-    fun skipGoal() {
-        _uiState.update {
-            it.copy(draft = it.draft.copy(goal = ""), step = SwitchStep.PLANNED)
-        }
-    }
-
-    // ---- Step 4（予定時間） ----
 
     fun selectPlannedMinutes(minutes: Int) =
         _uiState.update { it.copy(draft = it.draft.copy(plannedMinutes = minutes)) }
@@ -247,12 +249,8 @@ class SwitchViewModel(
                     false
                 }
             }
-            SwitchStep.GOAL -> {
+            SwitchStep.GOAL_AND_TIME -> {
                 _uiState.update { it.copy(step = SwitchStep.NAME) }
-                true
-            }
-            SwitchStep.PLANNED -> {
-                _uiState.update { it.copy(step = SwitchStep.GOAL) }
                 true
             }
         }
