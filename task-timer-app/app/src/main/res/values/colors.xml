@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Compose 側の Ink と同じ値。Compose が描き始める前の一瞬（windowBackground）で
-         白くフラッシュさせないために XML 側にも持たせている。 -->
-    <color name="ink">#FF101114</color>
-    <color name="ic_launcher_background">#FF101114</color>
+    <!-- Compose 側の Paper（基底面）と同じ値。Compose が描き始める前の一瞬（windowBackground）で
+         白くフラッシュさせないために XML 側にも持たせている。
+         Color.kt の Paper を変えたらここも必ず追従させること。
+         ※ 名前が ink だったのは Phase 0 の仮パレットの名残。tokens.css 移植で
+           「ink」は主テキスト（明るい色）を指す名前になったので、地の色は paper に改名した。 -->
+    <color name="paper">#FF060A0E</color>
+    <color name="ic_launcher_background">#FF060A0E</color>
 </resources>

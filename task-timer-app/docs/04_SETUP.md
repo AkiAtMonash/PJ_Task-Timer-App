@@ -25,6 +25,10 @@ Web 開発の経験がある前提で、Android 特有のところだけ丁寧�
 
 ## 1. Android Studio のインストール
 
+> **手で全部やらなくてよい。**`scripts/setup-windows.ps1` を PowerShell に貼れば、
+> Android Studio のインストールとリポジトリの取得まで自動で終わる。
+> そのあとに残る「初回ウィザードで SDK を落とす」だけが手作業（画面をクリックするしかない）。
+
 1. https://developer.android.com/studio から **Android Studio** をダウンロード
 2. インストーラを実行。途中の選択肢は**すべてデフォルトのまま**でよい
 3. 初回起動時にセットアップウィザードが走る

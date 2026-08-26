@@ -1,4 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">TaskTimer</string>
+
+    <!-- ホーム（進行中） -->
+    <string name="home_planned">予定 %1$d分</string>
+    <string name="home_remaining">残り %1$d分</string>
+    <string name="home_overrun">%1$d分 超過</string>
+    <string name="home_switch">タスクを切り替える</string>
+    <string name="home_stop">中断（記録して停止）</string>
+
+    <!-- ホーム（未計測）。中断直後と初回起動でしか出ない -->
+    <string name="home_idle">計測していません</string>
+    <string name="home_start">タスクを開始する</string>
+    <string name="home_last_record">最後の記録</string>
+
+    <!-- 切り替えフロー Step 1：前タスクの評価 -->
+    <string name="switch_elapsed_label">経過時間</string>
+    <string name="switch_planned_and_rate">予定 %1$d分 / %2$d%%</string>
+    <string name="switch_rating_question">この時間の使い方は？</string>
+    <string name="switch_rating_good">良かった</string>
+    <string name="switch_rating_normal">普通</string>
+    <string name="switch_rating_bad">悪かった</string>
+    <string name="switch_rating_needs_note">理由を入力</string>
+    <string name="switch_rating_is_default">デフォルト</string>
+    <!-- 現行の MacroDroid マクロで使っている文言をそのまま引き継ぐ -->
+    <string name="switch_note_title_good">何故時間の使い方が良かったのか議論しよう</string>
+    <string name="switch_note_title_bad">何故時間の使い方が悪かったか議論しよう</string>
+    <string name="switch_note_placeholder">理由を書く</string>
+    <string name="switch_note_next">次へ</string>
+    <string name="switch_stop_confirm">記録して停止する</string>
+
+    <!-- 切り替えフロー Step 2：次のタスク -->
+    <string name="switch_task_question">次は何をする？</string>
+    <string name="switch_task_new">＋ 新しいタスク…</string>
+    <string name="switch_task_name_placeholder">タスク名</string>
+    <string name="switch_task_name_next">次へ</string>
+    <string name="switch_tag_question">タグは？</string>
+
+    <!-- 切り替えフロー Step 3：ゴールと予定時間 -->
+    <string name="switch_goal_question">ゴールは？</string>
+    <string name="switch_goal_placeholder">（空でもよい）</string>
+    <string name="switch_time_question">何分でやる？</string>
+    <string name="switch_time_free">自由入力</string>
+    <string name="switch_time_unit">分</string>
+    <string name="switch_start">開始する</string>
 </resources>

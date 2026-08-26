@@ -1,0 +1,30 @@
+# Android / Gradle の生成物。コミットすると数百 MB になるうえ、
+# PC が変わると中身が食い違って事故る。
+
+# PC 固有の SDK パス。Android Studio がプロジェクトを開いたときに自動生成する。
+# ここを Git に入れると、別の PC で開いたとき他人のパスを見に行って
+# 「SDK location not found」で止まる。
+local.properties
+
+# ビルド生成物
+build/
+.gradle/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.cxx/
+captures/
+
+# OS が勝手に作るもの
+.DS_Store
+Thumbs.db
+
+# 署名鍵。**絶対にコミットしない**
+*.jks
+*.keystore
