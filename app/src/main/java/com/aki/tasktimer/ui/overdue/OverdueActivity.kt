@@ -39,6 +39,8 @@ class OverdueActivity : ComponentActivity() {
         )
         setShowWhenLocked(true)
         setTurnScreenOn(true)
+        // 答えるまで画面を消さない（ロック画面の上では画面が早く消えるため）。
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         // 逃げ道の封鎖。予測型バックでも効くよう Dispatcher に登録する。
         onBackPressedDispatcher.addCallback(this) { /* 何もしない */ }
@@ -106,6 +108,7 @@ private fun OverdueRoute(
     OverdueScreen(
         state = uiState,
         onSelect = viewModel::select,
+        onCustomInput = viewModel::setCustomInput,
         onExtend = viewModel::extend,
         onSwitchTask = onSwitchTask,
         onEmergencyExit = onEmergencyExit,

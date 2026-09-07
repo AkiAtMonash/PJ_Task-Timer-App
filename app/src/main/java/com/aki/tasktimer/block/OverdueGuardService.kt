@@ -48,13 +48,39 @@ class OverdueGuardService : Service() {
     private var watchJob: Job? = null
     private var acknowledged = false
     private var vibrating = false
+    private var lastForeground: Boolean? = null
     private var lastNotifiedAcknowledged: Boolean? = null
     private var broughtBackOnce = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /**
+     * 画面の ON/OFF。電源ボタンで画面を消すと Android がバイブを止めてしまうので、
+     * 画面が消えた／点いたタイミングで鳴らし直す（Aki の要望：電源ボタンで止まらない）。
+     */
+    private val screenState = kotlinx.coroutines.flow.MutableStateFlow(0L)
+    private val screenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            screenState.value = System.currentTimeMillis()
+            if (vibrating && !acknowledged) {
+                scope.launch {
+                    delay(400)
+                    if (vibrating && !acknowledged) container.vibration.startRepeating()
+                }
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
+        registerReceiver(
+            screenReceiver,
+            android.content.IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_USER_PRESENT)
+            },
+        )
         // 覆いの準備に失敗しても（機種差など）サービス自体は落とさない。バイブと通知だけで続行する。
         overlay = runCatching {
             OverlayView(
@@ -116,13 +142,15 @@ class OverdueGuardService : Service() {
         }
 
         // バイブ：応答（中断して別のタスクへ／延長）まで鳴らし続ける。
-        if (!acknowledged && !vibrating) {
+        // 自アプリが前面から外れた瞬間（電源ボタンで画面が消えた等）にも鳴らし直す。
+        if (!acknowledged && (!vibrating || s.foreground != lastForeground)) {
             container.vibration.startRepeating()
             vibrating = true
         } else if (acknowledged && vibrating) {
             container.vibration.stop()
             vibrating = false
         }
+        lastForeground = s.foreground
 
         // 覆い：強制力 ON で、権限があり、自アプリが前面でないときだけ。
         val shouldCover = decision == GuardDecision.ALERT &&
@@ -192,6 +220,7 @@ class OverdueGuardService : Service() {
     }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(screenReceiver) }
         watchJob?.cancel()
         container.vibration.stop()
         overlay?.hide()

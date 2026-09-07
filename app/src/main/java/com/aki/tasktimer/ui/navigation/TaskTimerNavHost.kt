@@ -26,6 +26,7 @@ object Routes {
 @Composable
 fun TaskTimerNavHost(
     openSwitchRequest: Int = 0,
+    onSwitchFlowFinished: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val navController = rememberNavController()
@@ -49,7 +50,10 @@ fun TaskTimerNavHost(
         }
         composable(Routes.SWITCH) {
             SwitchScreen(
-                onDone = { navController.popBackStack(Routes.HOME, inclusive = false) },
+                onDone = {
+                    navController.popBackStack(Routes.HOME, inclusive = false)
+                    onSwitchFlowFinished()
+                },
             )
         }
         composable(Routes.SETTINGS) {

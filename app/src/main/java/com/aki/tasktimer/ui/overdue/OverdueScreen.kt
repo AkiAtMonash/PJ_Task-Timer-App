@@ -13,8 +13,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,6 +60,7 @@ import com.aki.tasktimer.ui.theme.Warn
 fun OverdueScreen(
     state: OverdueUiState,
     onSelect: (Int) -> Unit,
+    onCustomInput: (String) -> Unit,
     onExtend: () -> Unit,
     onSwitchTask: () -> Unit,
     onEmergencyExit: () -> Unit,
@@ -149,10 +154,23 @@ fun OverdueScreen(
                         state.presets.forEach { preset ->
                             Pill(
                                 text = "+${preset.minutes}",
-                                selected = state.selectedMinutes == preset.minutes,
+                                selected = state.selectedMinutes == preset.minutes && state.customInput.isEmpty(),
                                 onClick = { onSelect(preset.minutes) },
                             )
                         }
+                        // 一番右：自由入力。プリセットに無い分数を使いたいとき用。
+                        OutlinedTextField(
+                            value = state.customInput,
+                            onValueChange = onCustomInput,
+                            placeholder = { Text("自由", fontSize = 13.sp) },
+                            suffix = { Text("分", fontSize = 13.sp, color = OnInkMuted) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
+                            modifier = Modifier
+                                .width(104.dp)
+                                .height(52.dp),
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))

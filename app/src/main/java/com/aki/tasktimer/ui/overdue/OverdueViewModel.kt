@@ -22,6 +22,8 @@ data class OverdueUiState(
     val presets: List<ExtensionPreset> = emptyList(),
     /** 選択中の延長分数。押しても即実行しない（docs/01_SPEC.md 4.4-1） */
     val selectedMinutes: Int? = null,
+    /** 自由入力欄の文字列。プリセットに無い分数を使いたいとき用 */
+    val customInput: String = "",
     val isSaving: Boolean = false,
     /** 超過画面を閉じてよい（延長した／進行中が無い／もう超過していない） */
     val done: Boolean = false,
@@ -68,7 +70,17 @@ class OverdueViewModel(
         }
     }
 
-    fun select(minutes: Int) = _uiState.update { it.copy(selectedMinutes = minutes) }
+    fun select(minutes: Int) = _uiState.update { it.copy(selectedMinutes = minutes, customInput = "") }
+
+    /** 自由入力。数字以外は無視。空にすると未選択に戻る。 */
+    fun setCustomInput(text: String) {
+        val trimmed = text.trim()
+        val minutes = if (trimmed.isEmpty()) null else trimmed.toIntOrNull()
+        if (trimmed.isNotEmpty() && minutes == null) return
+        _uiState.update {
+            it.copy(customInput = trimmed, selectedMinutes = minutes?.takeIf { m -> m > 0 })
+        }
+    }
 
     fun extend() {
         val state = _uiState.value

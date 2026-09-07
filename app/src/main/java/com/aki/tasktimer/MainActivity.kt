@@ -3,6 +3,7 @@ package com.aki.tasktimer
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -35,7 +36,15 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TaskTimerTheme {
-                TaskTimerNavHost(openSwitchRequest = openSwitchRequest)
+                TaskTimerNavHost(
+                    openSwitchRequest = openSwitchRequest,
+                    onSwitchFlowFinished = {
+                        // 次のタスクを開始したら、ロック画面の上に出る権利を返す。
+                        // ロック中だった場合はここでロック画面に戻る。
+                        setShowWhenLocked(false)
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    },
+                )
             }
         }
     }
@@ -51,6 +60,12 @@ class MainActivity : ComponentActivity() {
             // 同じ Intent が再配達されても二重に反応しないよう、読んだら消す。
             intent.removeExtra(EXTRA_OPEN_SWITCH)
             openSwitchRequest++
+            // 超過画面はロック画面の上に出る。そこから「中断して別のタスクへ」で来たときは、
+            // 評価〜開始までもロックの上で続けられるようにする（Aki の要望：途中でロック画面に戻らない）。
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+            // ロック画面の上では画面がすぐ消える設定になっていることが多い。入力の途中で消えないようにする。
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
