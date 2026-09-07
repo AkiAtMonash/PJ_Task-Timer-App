@@ -1,15 +1,25 @@
 package com.aki.tasktimer
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import com.aki.tasktimer.ui.navigation.TaskTimerNavHost
 import com.aki.tasktimer.ui.theme.TaskTimerTheme
 
 class MainActivity : ComponentActivity() {
+
+    /**
+     * 「切り替えフローを開いて」という依頼の回数。超過画面の「中断して別のタスクへ」や
+     * 覆いのタップから届く。値が増えるたびに NavHost が切り替え画面へ進む。
+     */
+    private var openSwitchRequest by mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -21,10 +31,30 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
 
+        handleIntent(intent)
+
         setContent {
             TaskTimerTheme {
-                TaskTimerNavHost()
+                TaskTimerNavHost(openSwitchRequest = openSwitchRequest)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_SWITCH, false) == true) {
+            // 同じ Intent が再配達されても二重に反応しないよう、読んだら消す。
+            intent.removeExtra(EXTRA_OPEN_SWITCH)
+            openSwitchRequest++
+        }
+    }
+
+    companion object {
+        const val EXTRA_OPEN_SWITCH = "open_switch"
     }
 }

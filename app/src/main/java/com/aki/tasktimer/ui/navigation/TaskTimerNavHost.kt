@@ -1,6 +1,7 @@
 package com.aki.tasktimer.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -18,10 +19,23 @@ object Routes {
 /**
  * 画面遷移の 1 本化（docs/02_ARCHITECTURE.md 4 章）。
  * ホーム・切り替えフロー・設定の 3 ルート。履歴は Phase 6 で追加する。
+ *
+ * @param openSwitchRequest 超過画面や覆いから「切り替えフローを開いて」と頼まれた回数。
+ *        増えるたびに切り替え画面へ進む（すでに開いていれば何もしない）。
  */
 @Composable
-fun TaskTimerNavHost(modifier: Modifier = Modifier) {
+fun TaskTimerNavHost(
+    openSwitchRequest: Int = 0,
+    modifier: Modifier = Modifier,
+) {
     val navController = rememberNavController()
+
+    LaunchedEffect(openSwitchRequest) {
+        if (openSwitchRequest > 0 && navController.currentDestination?.route != Routes.SWITCH) {
+            navController.navigate(Routes.SWITCH) { launchSingleTop = true }
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = Routes.HOME,

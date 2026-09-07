@@ -1,9 +1,13 @@
 package com.aki.tasktimer.ui.settings
 
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aki.tasktimer.data.model.SyncQueueItem
 import com.aki.tasktimer.data.prefs.SettingsRepository
+import com.aki.tasktimer.permission.PermissionChecker
+import com.aki.tasktimer.permission.PermissionKind
+import com.aki.tasktimer.permission.PermissionState
 import com.aki.tasktimer.sync.SyncRepository
 import java.time.ZoneId
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +29,9 @@ data class SettingsUiState(
     val pendingCount: Int = 0,
     val failedCount: Int = 0,
     val failedItems: List<SyncQueueItem> = emptyList(),
+    /** 超過時に覆いで他のアプリに行けなくするか */
+    val blockEnabled: Boolean = true,
+    val permissions: List<PermissionState> = emptyList(),
     /** 操作の結果を 1 行で知らせる。null なら何も出さない。 */
     val message: String? = null,
 )
@@ -32,9 +39,10 @@ data class SettingsUiState(
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val syncRepository: SyncRepository,
+    private val permissionChecker: PermissionChecker,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(SettingsUiState())
+    private val _uiState = MutableStateFlow(SettingsUiState(permissions = permissionChecker.checkAll()))
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
     init {
@@ -44,8 +52,9 @@ class SettingsViewModel(
                 syncRepository.observePendingCount(),
                 syncRepository.observeFailedCount(),
                 syncRepository.observeFailed(),
-            ) { settings, pending, failed, failedItems ->
-                Snapshot(settings.enabled, settings.hasToken, settings.databaseId, pending, failed, failedItems)
+                settingsRepository.observeBlockEnabled(),
+            ) { settings, pending, failed, failedItems, block ->
+                Snapshot(settings.enabled, settings.hasToken, settings.databaseId, pending, failed, failedItems, block)
             }.collect { s ->
                 _uiState.update { state ->
                     state.copy(
@@ -57,6 +66,7 @@ class SettingsViewModel(
                         pendingCount = s.pending,
                         failedCount = s.failed,
                         failedItems = s.failedItems,
+                        blockEnabled = s.block,
                     )
                 }
             }
@@ -78,7 +88,10 @@ class SettingsViewModel(
         val pending: Int,
         val failed: Int,
         val failedItems: List<SyncQueueItem>,
+        val block: Boolean,
     )
+
+    // ---- Notion 連携 ----
 
     fun setTokenInput(value: String) = _uiState.update { it.copy(tokenInput = value) }
 
@@ -147,6 +160,19 @@ class SettingsViewModel(
             }
         }
     }
+
+    // ---- 強制力・権限 ----
+
+    fun setBlockEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setBlockEnabled(enabled) }
+    }
+
+    /** Android の設定画面から戻ってきたときに呼ぶ。許可の状態は Flow で流れてこないので手で取り直す。 */
+    fun refreshPermissions() {
+        _uiState.update { it.copy(permissions = permissionChecker.checkAll()) }
+    }
+
+    fun intentFor(kind: PermissionKind): Intent = permissionChecker.intentFor(kind)
 
     fun dismissMessage() = _uiState.update { it.copy(message = null) }
 }

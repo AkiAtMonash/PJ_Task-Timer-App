@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aki.tasktimer.BuildConfig
@@ -59,12 +60,23 @@ fun SettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val app = LocalContext.current.applicationContext as TaskTimerApp
+    val context = LocalContext.current
+    val app = context.applicationContext as TaskTimerApp
     val viewModel: SettingsViewModel = viewModel {
-        SettingsViewModel(app.container.settingsRepository, app.container.syncRepository)
+        SettingsViewModel(
+            app.container.settingsRepository,
+            app.container.syncRepository,
+            app.container.permissionChecker,
+        )
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Android の設定画面から戻ってきたら許可の状態を取り直す。
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshPermissions()
+        onPauseOrDispose { }
+    }
 
     LaunchedEffect(uiState.message) {
         val message = uiState.message ?: return@LaunchedEffect
@@ -94,6 +106,62 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
+            SectionTitle("強制力")
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("超過したら他のアプリに行けなくする", color = OnInk, fontSize = 14.sp)
+                    Text(
+                        text = "OFF でも超過画面とバイブは出る。ホームを押せば抜けられる",
+                        color = OnInkMuted,
+                        fontSize = 12.sp,
+                    )
+                }
+                Switch(
+                    checked = uiState.blockEnabled,
+                    onCheckedChange = viewModel::setBlockEnabled,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            SectionTitle("権限")
+
+            uiState.permissions.forEach { p ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "${p.kind.label}  ${if (p.granted) "✅ 許可済み" else if (p.required) "⚠️ 未許可" else "－ 未設定"}",
+                            color = if (p.granted || !p.required) OnInk else Warn,
+                            fontSize = 14.sp,
+                        )
+                        Text(text = p.kind.purpose, color = OnInkMuted, fontSize = 12.sp)
+                    }
+                    if (!p.granted) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        SecondaryButton(
+                            text = "設定を開く",
+                            onClick = { context.startActivity(viewModel.intentFor(p.kind)) },
+                            modifier = Modifier.width(110.dp),
+                        )
+                    }
+                }
+            }
+            Text(
+                text = "バイブが鳴らないときは、Pixel の設定「音とバイブレーション」でアラームのバイブが OFF になっていないか確認してください。",
+                color = OnInkMuted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
             SectionTitle("Notion 連携")
 
             Row(

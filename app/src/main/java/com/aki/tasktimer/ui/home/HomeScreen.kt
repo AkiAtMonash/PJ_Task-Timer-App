@@ -1,6 +1,5 @@
 package com.aki.tasktimer.ui.home
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,10 +11,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.aki.tasktimer.permission.PermissionKind
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -27,9 +34,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +44,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aki.tasktimer.TaskTimerApp
 import com.aki.tasktimer.data.model.Session
 import com.aki.tasktimer.domain.elapsedMinutes
+import com.aki.tasktimer.ui.component.GoalRow
 import com.aki.tasktimer.ui.component.PrimaryButton
 import com.aki.tasktimer.ui.component.TagChip
 import com.aki.tasktimer.ui.component.ratingSymbol
@@ -59,26 +64,55 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val app = LocalContext.current.applicationContext as TaskTimerApp
+    val context = LocalContext.current
+    val app = context.applicationContext as TaskTimerApp
     val viewModel: HomeViewModel = viewModel { HomeViewModel(app.container.sessionRepository) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // 通知の許可（docs/05 2.5）。全画面の超過画面は通知の一種なので、これが無いと何も出ない。
+    // 初回に 1 度だけ聞く。拒否されたらホーム上部に案内を出し、Android の設定へ誘導する。
+    val permissionChecker = app.container.permissionChecker
+    var notificationsDenied by remember { mutableStateOf(!permissionChecker.hasNotifications()) }
+    val requestNotifications = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> notificationsDenied = !granted }
+    LaunchedEffect(Unit) {
+        if (!permissionChecker.hasNotifications()) {
+            requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
-            // 設定（Notion 連携）への入口。タイマー表示の邪魔にならないよう右上に小さく置く。
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 4.dp),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                IconButton(onClick = onOpenSettings) {
-                    Icon(
-                        imageVector = Icons.Outlined.Settings,
-                        contentDescription = "設定",
-                        tint = OnInkMuted,
+            Column {
+                // 設定（Notion 連携・強制力・権限）への入口。タイマー表示の邪魔にならないよう右上に小さく置く。
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = "設定",
+                            tint = OnInkMuted,
+                        )
+                    }
+                }
+                if (notificationsDenied) {
+                    Text(
+                        text = "通知が許可されていません。予定時間が来ても超過画面が出ません。タップして設定を開く",
+                        color = Warn,
+                        fontSize = 12.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                context.startActivity(permissionChecker.intentFor(PermissionKind.NOTIFICATIONS))
+                            }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
             }
@@ -169,38 +203,6 @@ private fun RunningHome(
         // 「中断（記録して停止）」は置かない。記録が止まっている瞬間を作らないのがこのアプリの前提で、
         // 「今のを終えて別のことを始める」は切り替えそのもの（docs/01_SPEC.md 4.1）。
         PrimaryButton(text = "タスクを切り替える", onClick = onSwitch)
-    }
-}
-
-/**
- * ゴールの標識。ワイヤーフレームは SVG の的（円＋十字）を使っているので、
- * 絵文字にせず Canvas で同じ形を描く（絵文字はワイヤーフレーム gate 30 で禁じている）。
- */
-@Composable
-private fun GoalRow(goal: String, modifier: Modifier = Modifier) {
-    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
-        GoalMarker(modifier = Modifier.size(12.dp))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = goal,
-            color = OnInkMuted,
-            fontSize = 14.sp,
-        )
-    }
-}
-
-@Composable
-private fun GoalMarker(modifier: Modifier = Modifier, color: Color = OnInkMuted) {
-    Canvas(modifier = modifier) {
-        val stroke = 1.2.dp.toPx()
-        val c = Offset(size.width / 2f, size.height / 2f)
-        val outer = minOf(size.width, size.height) / 2f - stroke
-        val inner = outer * 0.45f
-        drawCircle(color = color, radius = outer, center = c, style = Stroke(stroke))
-        drawLine(color, Offset(c.x, c.y - outer), Offset(c.x, c.y - inner), strokeWidth = stroke)
-        drawLine(color, Offset(c.x, c.y + inner), Offset(c.x, c.y + outer), strokeWidth = stroke)
-        drawLine(color, Offset(c.x - outer, c.y), Offset(c.x - inner, c.y), strokeWidth = stroke)
-        drawLine(color, Offset(c.x + inner, c.y), Offset(c.x + outer, c.y), strokeWidth = stroke)
     }
 }
 

@@ -5,9 +5,12 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.aki.tasktimer.domain.DismissedOccurrence
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
@@ -32,6 +35,8 @@ class SettingsRepository(
 ) {
 
     private val dataStore = context.applicationContext.settingsDataStore
+
+    // ---- Notion 連携 ----
 
     fun observe(): Flow<SyncSettings> = dataStore.data.map { prefs ->
         SyncSettings(
@@ -82,6 +87,40 @@ class SettingsRepository(
         dataStore.edit { it[KEY_DATABASE_ID] = cleaned }
     }
 
+    // ---- 強制力（ブロック） ----
+
+    /** 超過時に覆いで他のアプリに行けなくするか。初期値 ON。 */
+    fun observeBlockEnabled(): Flow<Boolean> =
+        dataStore.data.map { it[KEY_BLOCK_ENABLED] ?: true }.distinctUntilChanged()
+
+    suspend fun isBlockEnabled(): Boolean = observeBlockEnabled().first()
+
+    suspend fun setBlockEnabled(enabled: Boolean) {
+        dataStore.edit { it[KEY_BLOCK_ENABLED] = enabled }
+    }
+
+    // ---- 非常口の記憶 ----
+
+    /**
+     * 非常口で閉じた「超過の 1 回分」。アプリ起動時の予約し直しで同じ超過がまた鳴らないよう、
+     * メモリではなくここに残す。
+     */
+    fun observeDismissedOccurrence(): Flow<DismissedOccurrence?> =
+        dataStore.data.map { prefs ->
+            val id = prefs[KEY_DISMISSED_SESSION_ID]
+            val deadline = prefs[KEY_DISMISSED_DEADLINE]
+            if (id == null || deadline == null) null else DismissedOccurrence(id, deadline)
+        }.distinctUntilChanged()
+
+    suspend fun getDismissedOccurrence(): DismissedOccurrence? = observeDismissedOccurrence().first()
+
+    suspend fun setDismissedOccurrence(occurrence: DismissedOccurrence) {
+        dataStore.edit {
+            it[KEY_DISMISSED_SESSION_ID] = occurrence.sessionId
+            it[KEY_DISMISSED_DEADLINE] = occurrence.deadlineMillis
+        }
+    }
+
     companion object {
         /** 既存の「⏱️ DB_タイムログ」（docs/06 2 章）。設定画面で変えられる。 */
         const val DEFAULT_DATABASE_ID = "18a0bc4f73378145ae19d00b3921f39b"
@@ -89,5 +128,8 @@ class SettingsRepository(
         private val KEY_SYNC_ENABLED = booleanPreferencesKey("sync_enabled")
         private val KEY_DATABASE_ID = stringPreferencesKey("notion_database_id")
         private val KEY_TOKEN_ENC = stringPreferencesKey("notion_token_enc")
+        private val KEY_BLOCK_ENABLED = booleanPreferencesKey("block_enabled")
+        private val KEY_DISMISSED_SESSION_ID = longPreferencesKey("dismissed_session_id")
+        private val KEY_DISMISSED_DEADLINE = longPreferencesKey("dismissed_deadline")
     }
 }

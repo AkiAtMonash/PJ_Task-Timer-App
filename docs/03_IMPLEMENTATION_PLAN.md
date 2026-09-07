@@ -97,45 +97,48 @@ Notion 側の詳細は `docs/06_NOTION_INTEGRATION.md`。
 
 ---
 
-## Phase 4 — アラームと超過画面（★このアプリの核）
+## Phase 4 — アラームと超過画面（★このアプリの核）（2026-09-07 実装。Phase 3 より先に着手）
 
 **目的：予定時間が来たら全画面で出る。**
 
-- [ ] `AlarmScheduler`（`setExactAndAllowWhileIdle`）
-- [ ] `OverdueReceiver`
-- [ ] `OverdueActivity`（`showWhenLocked` / `turnScreenOn` / `excludeFromRecents`）
-- [ ] full-screen intent 通知（`PRIORITY_HIGH` ＋ `CATEGORY_ALARM`）
-- [ ] バイブレーション（音は鳴らさない）
-- [ ] 超過画面 UI
-      - ゴール再掲（タスク名は出さない）
+- [x] `AlarmScheduler`（`setExactAndAllowWhileIdle`）
+- [x] `OverdueReceiver`
+- [x] `OverdueActivity`（`showWhenLocked` / `turnScreenOn` / `excludeFromRecents`）
+- [x] full-screen intent 通知（`PRIORITY_HIGH` ＋ `CATEGORY_ALARM`）
+- [x] バイブレーション（音は鳴らさない。**応答するまで繰り返す**）
+- [x] 超過画面 UI
+      - タグ・タスク名・ゴール
       - 経過 / 予定 / **超過率**（分母は当初予定。150% 超で警告色）
       - 延長プリセット（**選択式**。押しても即実行しない）
       - **「合計所要時間」が 1 か所だけ更新される**
-      - 「延長する」/「タスクを終える」
-- [ ] 延長時：`Extension` 追加 → `totalPlannedMinutes` 更新 → アラーム再登録
-- [ ] 「終える」時：評価ステップ（Step 1）に遷移
-- [ ] `BootReceiver`（再起動後のアラーム再登録）
-- [ ] `USE_FULL_SCREEN_INTENT` 未付与時のデグレード動作
+      - 「延長する」/「中断して別のタスクへ」
+- [x] 延長時：`Extension` 追加 → `totalPlannedMinutes` 更新 → アラーム再登録
+- [x] 「中断して別のタスクへ」時：評価ステップ（Step 1）に遷移
+- [x] `BootReceiver`（再起動後のアラーム再登録）＋ アプリ起動時の再登録
+- [x] `USE_FULL_SCREEN_INTENT` 未付与時のデグレード動作（通知＋バイブ）
+- [x] 設定画面に権限の状態と Android 設定への導線
 
-**完了条件**：`docs/05_ANDROID_CONSTRAINTS.md` 6 章のチェックリストのうち、
-オーバーレイ関連以外がすべて ✅。**画面を消して放置しても正確に鳴る**こと。
+PC から実機を操作して確認済み：画面 OFF（ロック中）で期限 → 画面が点いて超過画面、バイブ継続／
+延長で閉じて再予約／中断で評価画面へ／戻るボタン無効／強制終了・再起動後の再登録。
+Aki の最終確認待ち：バイブの体感、機内モード、他アプリ全画面中の表示、実際の再起動。
 
 ---
 
-## Phase 5 — オーバーレイブロック（強制力）
+## Phase 5 — オーバーレイブロック（強制力）（2026-09-07 実装）
 
 **目的：ホームボタンで逃げられなくする。**
 
-- [ ] `SYSTEM_ALERT_WINDOW` の許可導線
-- [ ] `BlockerOverlayService`（`TYPE_APPLICATION_OVERLAY`、全画面）
-- [ ] 超過時：full-screen intent ＋ オーバーレイを同時起動
-- [ ] 「延長」「終える」の確定でオーバーレイ解除
-- [ ] **非常口：画面右上を 3 秒長押し → 「強制的に閉じる」確認ダイアログ**
-- [ ] 設定画面で強制力を完全 OFF にできるトグル
-- [ ] 権限なし／例外発生時はオーバーレイなしで続行（クラッシュさせない）
+- [x] `SYSTEM_ALERT_WINDOW` の許可導線（設定画面）
+- [x] `OverdueGuardService`（specialUse の FGS。バイブ・覆い・常駐通知を集約）＋ `OverlayView`（`TYPE_APPLICATION_OVERLAY`、全画面）
+- [x] 超過時：full-screen intent ＋ サービス起動（アラーム受信側と超過画面の両方から。二重の保険）
+- [x] 「延長」で解除。「中断して別のタスクへ」は**次のタスクが始まるまで**継続
+- [x] **非常口：画面右上を 30 秒長押し → 「強制的に閉じる」確認**（超過画面と覆いの両方）。閉じた超過は記憶して再発火させない
+- [x] 設定画面で強制力を完全 OFF にできるトグル（既定 ON）
+- [x] 権限なし／例外発生時はオーバーレイなしで続行（クラッシュさせない）
 
-**完了条件**：超過画面でホームボタンを押しても引き戻される。
-かつ、非常口から確実に脱出できる。強制力 OFF にすると Phase 4 の挙動に戻る。
+PC から実機を操作して確認済み：ホーム → 覆い → タップで戻る／切り替えフロー途中のホームでも覆い／
+次のタスク開始で覆いとサービスが消える／非常口 30 秒 → 確認 → 全部止まる／force-stop 後に再発火しない。
+Aki の最終確認待ち：強制力 OFF の挙動、通知バーからの他アプリ起動時の見え方。
 
 > ⚠️ **この Phase は端末が操作不能になるリスクがある。**
 > 実機でテストする前に必ず非常口を先に実装し、非常口のテストを最初に行うこと。
