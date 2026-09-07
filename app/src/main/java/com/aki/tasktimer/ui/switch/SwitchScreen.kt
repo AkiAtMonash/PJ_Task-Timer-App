@@ -187,19 +187,26 @@ private fun RatingStep(state: SwitchUiState, viewModel: SwitchViewModel) {
             onSelect = viewModel::selectRating,
         )
 
-        if (state.rating != Rating.NORMAL) {
-            Spacer(modifier = Modifier.height(16.dp))
-            // 1 行固定。キーボードの右下ボタン（完了）で入力を終えてキーボードを閉じる。
-            OutlinedTextField(
-                value = state.ratingNote,
-                onValueChange = viewModel::setRatingNote,
-                label = { Text(if (state.rating == Rating.GOOD) "なぜ良かったか" else "なぜ悪かったか") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { keyboard?.hide() }),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        Spacer(modifier = Modifier.height(16.dp))
+        // 1 行固定。キーボードの右下ボタン（完了）で入力を終えてキーボードを閉じる。
+        // ◯/✕ は理由が必須、△ は任意（空なら「特に無し」になる）。
+        OutlinedTextField(
+            value = state.ratingNote,
+            onValueChange = viewModel::setRatingNote,
+            label = {
+                Text(
+                    when (state.rating) {
+                        Rating.GOOD -> "なぜ良かったか"
+                        Rating.BAD -> "なぜ悪かったか"
+                        Rating.NORMAL -> "コメント（任意）"
+                    },
+                )
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { keyboard?.hide() }),
+            modifier = Modifier.fillMaxWidth(),
+        )
 
         Spacer(modifier = Modifier.weight(1f))
 

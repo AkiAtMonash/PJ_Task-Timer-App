@@ -189,9 +189,12 @@ class SwitchViewModel(
         }
     }
 
-    /** △（普通）は理由を自動で「特に無し」にする（docs/01_SPEC.md 4.3 Step 1）。 */
+    /**
+     * △（普通）はコメント任意。空なら「特に無し」にする（docs/01_SPEC.md 4.3 Step 1）。
+     * 書いてあればそれを使う（2026-09-07、Aki の要望）。
+     */
     private fun resolvedNote(state: SwitchUiState): String =
-        if (state.rating == Rating.NORMAL) "特に無し" else state.ratingNote.trim()
+        state.ratingNote.trim().ifBlank { "特に無し" }
 
     companion object {
         // 予定時間プリセット。仕様 3 章に頻度を記録するテーブルが無いため固定値
