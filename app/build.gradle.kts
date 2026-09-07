@@ -33,6 +33,8 @@ android {
 
     buildFeatures {
         compose = true
+        // 設定画面の「日またぎのテスト記録を作る」をデバッグビルドだけに出すため BuildConfig.DEBUG が要る。
+        buildConfig = true
     }
 }
 
@@ -63,13 +65,21 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.core)
 
     implementation(libs.androidx.room.runtime)
     ksp(libs.androidx.room.compiler)
 
     implementation(libs.kotlinx.coroutines.core)
 
+    // Notion 同期（Phase 2.5）。バックグラウンド送信と設定の永続化。
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.okhttp)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
+    // Notion に送る JSON の組み立てを JVM でテストするため。android.jar の org.json はスタブなので実体を足す。
+    testImplementation(libs.org.json)
 }

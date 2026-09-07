@@ -26,7 +26,7 @@ Claude Code に「`docs/04_SETUP.md` の手順を一緒にやって」と頼ん�
 | [`docs/03_IMPLEMENTATION_PLAN.md`](docs/03_IMPLEMENTATION_PLAN.md) | Phase 0〜7 の実装順序と完了条件 | 両方 |
 | [`docs/04_SETUP.md`](docs/04_SETUP.md) | **Android 未経験者向け環境構築＋実機転送** | Aki |
 | [`docs/05_ANDROID_CONSTRAINTS.md`](docs/05_ANDROID_CONSTRAINTS.md) | 権限・OS制約の罠。実装前に必読 | Claude Code |
-| [`docs/06_NOTION_INTEGRATION.md`](docs/06_NOTION_INTEGRATION.md) | v2 用。既存 Notion システムの仕様記録 | 両方 |
+| [`docs/06_NOTION_INTEGRATION.md`](docs/06_NOTION_INTEGRATION.md) | Notion 連携の仕様（DB スキーマ・送り方・運用） | 両方 |
 | [`mockups/wireframe.html`](mockups/wireframe.html) | 画面イメージ。ブラウザで開く | Aki |
 
 ---
@@ -49,11 +49,11 @@ Claude Code に「`docs/04_SETUP.md` の手順を一緒にやって」と頼ん�
 - ✅ 超過画面：ゴール再掲・超過率・延長プリセット選択 → **合計所要時間が 1 か所で更新**
 - ✅ 評価（◯/△/✕）と理由メモ
 - ✅ 履歴・日別／タグ別集計
-- ✅ **ローカル完結**（Notion 同期なし）
+- ✅ **Notion のタイムログへ自動記録**（一方向。開始で「進行中」、終了で「完了」。2026-09-07 に v2 から前倒し）
 
 ## v2 以降（今回は作らない）
 
-- ⏭ Notion 同期（既存 DB スキーマに合わせる。仕様は `docs/06` に記録済み）
+- ⏭ Notion からの取り込み（双方向同期）
 - ⏭ ホーム画面ウィジェット（Glance）
 - ⏭ 音楽アプリと同時表示できる常駐オーバーレイ
 - ⏭ アクセシビリティサービスによる完全なアプリ遷移ブロック
@@ -72,5 +72,6 @@ Claude Code に「`docs/04_SETUP.md` の手順を一緒にやって」と頼ん�
 | アラーム | **バイブのみ**（音は鳴らさない。音楽を聴きながら使う想定） |
 | プリセット並び | 使用頻度で自動並び替え |
 | 延長プリセット | 固定初期値あり ＋ ユーザー編集可 |
-| データの正 | v1 はアプリ内 Room DB が唯一の正 |
+| データの正 | アプリ内 Room DB が唯一の正。Notion は写し（送るだけ） |
+| 中断 | 「中断」ボタンは無い。記録が止まる瞬間を作らない。終えるときは必ず次を始める（切り替え） |
 | 配布 | Play ストアには出さない。自分の Pixel 9a にサイドロード |

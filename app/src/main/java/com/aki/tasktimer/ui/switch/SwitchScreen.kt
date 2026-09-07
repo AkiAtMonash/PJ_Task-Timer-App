@@ -62,13 +62,12 @@ private val PLANNED_MINUTE_PRESETS = listOf(15, 25, 30, 45, 60, 90, 120)
 
 @Composable
 fun SwitchScreen(
-    mode: SwitchMode,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val app = LocalContext.current.applicationContext as TaskTimerApp
     val viewModel: SwitchViewModel = viewModel {
-        SwitchViewModel(app.container.sessionRepository, app.container.presetRepository, mode)
+        SwitchViewModel(app.container.sessionRepository, app.container.presetRepository)
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -117,7 +116,7 @@ fun SwitchScreen(
 private fun RatingStep(state: SwitchUiState, viewModel: SwitchViewModel) {
     val session = state.runningSession
     if (session == null) {
-        // STOP 以外でここに来ることは無いが、防御として空にしない。
+        // 進行中が無いときは NAME から始まるのでここには来ないが、防御として空にしない。
         Text("評価するセッションがありません", color = OnInkMuted)
         return
     }

@@ -2,6 +2,7 @@ package com.aki.tasktimer.ui.home
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,8 +13,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,7 +41,6 @@ import com.aki.tasktimer.TaskTimerApp
 import com.aki.tasktimer.data.model.Session
 import com.aki.tasktimer.domain.elapsedMinutes
 import com.aki.tasktimer.ui.component.PrimaryButton
-import com.aki.tasktimer.ui.component.SecondaryButton
 import com.aki.tasktimer.ui.component.TagChip
 import com.aki.tasktimer.ui.component.ratingSymbol
 import com.aki.tasktimer.ui.theme.InkVariant
@@ -51,21 +56,40 @@ import com.aki.tasktimer.ui.util.formatElapsed
 @Composable
 fun HomeScreen(
     onStart: () -> Unit,
-    onInterrupt: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val app = LocalContext.current.applicationContext as TaskTimerApp
     val viewModel: HomeViewModel = viewModel { HomeViewModel(app.container.sessionRepository) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(modifier = modifier.fillMaxSize()) { innerPadding ->
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            // 設定（Notion 連携）への入口。タイマー表示の邪魔にならないよう右上に小さく置く。
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                IconButton(onClick = onOpenSettings) {
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "設定",
+                        tint = OnInkMuted,
+                    )
+                }
+            }
+        },
+    ) { innerPadding ->
         val session = uiState.runningSession
         if (session != null) {
             RunningHome(
                 session = session,
                 now = uiState.now,
                 onSwitch = onStart,
-                onInterrupt = onInterrupt,
                 modifier = Modifier.padding(innerPadding),
             )
         } else {
@@ -83,7 +107,6 @@ private fun RunningHome(
     session: Session,
     now: Long,
     onSwitch: () -> Unit,
-    onInterrupt: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val elapsed = elapsedMinutes(session.startedAt, now)
@@ -143,9 +166,9 @@ private fun RunningHome(
 
         Spacer(modifier = Modifier.weight(1f))
 
+        // 「中断（記録して停止）」は置かない。記録が止まっている瞬間を作らないのがこのアプリの前提で、
+        // 「今のを終えて別のことを始める」は切り替えそのもの（docs/01_SPEC.md 4.1）。
         PrimaryButton(text = "タスクを切り替える", onClick = onSwitch)
-        Spacer(modifier = Modifier.height(8.dp))
-        SecondaryButton(text = "中断（記録して停止）", onClick = onInterrupt)
     }
 }
 

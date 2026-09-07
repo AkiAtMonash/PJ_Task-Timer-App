@@ -1,9 +1,10 @@
-# 06. Notion 連携（v2 向けの記録）
+# 06. Notion 連携
 
-**v1 では実装しない。** ここは既存システムの仕様を失わないための記録であり、
-v2 で同期を作るときの設計材料。
+**2026-09-07 に v1（Phase 2.5）で実装済み。** MacroDroid を止めたため前倒しした。
+アプリ側の挙動は `docs/01_SPEC.md` 6.3、実装は `sync/` パッケージと `data/prefs/`。
+ここは Notion 側の仕様と運用の記録。
 
-出典：Notion「時間計測自動化：運用マニュアル」（2026-01-07 更新）
+出典：Notion「時間計測自動化：運用マニュアル」（2026-01-07 更新）＋ 2026-09-07 に MCP で確認した現物のスキーマ
 
 ---
 
@@ -30,29 +31,31 @@ v2 で同期を作るときの設計材料。
      超過を Webhook で受けて LINE 通知する構想
 ```
 
-**TaskTimer が置き換えるのは [1] と [2]。**
-[3] の GAS は当面そのまま残す（v2 で同期を作るときに再検討）。
+**TaskTimer が置き換えたのは [1] [2] [3]。** 2026-09-07 時点で MacroDroid の 2 マクロと GAS は停止済み。
+再び動かすと行が二重になる（アプリも日またぎを分割するため）。
 
 ---
 
-## 2. Notion 側の DB スキーマ
+## 2. Notion 側の DB スキーマ（2026-09-07 に現物を確認）
 
 DB ID: `18a0bc4f73378145ae19d00b3921f39b`
+データソース: `collection://18a0bc4f-7337-81e3-81b2-000bbed29a72`
 
-| プロパティ | 型 | TaskTimer 側の対応 |
+| プロパティ | 型 | TaskTimer から送る値 |
 |---|---|---|
 | 名前 | title | `Session.name` |
-| status | status | `Session.status`（進行中 / 完了 / 引継ぎ待ち / 未着手） |
-| time | date（範囲） | `startedAt` 〜 `endedAt` |
-| タグ | multi_select | `Session.tag` |
-| 評価 | select | `Session.rating`（◯（良い）/ △（普通）/ ✕（悪い）） |
-| メモ | text | `Session.ratingNote` |
-| ゴール | text | `Session.goal` |
-| 予定時間（分） | number | `Session.plannedMinutes` |
-| 種別 | status | ログ / 予定 |
-| 時間 | formula | 自動計算（下記） |
-| 参考ページ | url | v1 では未使用 |
-| 日付 | date | 用途未確認 |
+| status | status | 開始時 `進行中`、終了時 `完了`（選択肢は 予定 / 引継ぎ待ち / 進行中 / 完了） |
+| time | date（範囲） | 開始時 start のみ、終了時 start と end（区間の両端） |
+| タグ | multi_select | `Session.tag.label` |
+| 評価 | select | 終了時のみ。◯（良い）/ △（普通）/ ✕（悪い） |
+| メモ | text | 終了時のみ。`Session.ratingNote`。空なら「特に無し」 |
+| ゴール | text | `Session.goal`。空ならプロパティごと省く |
+| 予定時間（分） | number | `Session.plannedMinutes`（当初の見積もり。延長分は足さない） |
+| 日付 | formula | 送らない（Notion 側で計算） |
+| 時間 | formula | 送らない（下記） |
+| 重複検知用 | checkbox | 送らない（別のエージェントが使う） |
+
+※ 旧マニュアルにあった「種別」「参考ページ」は現物には存在しない。
 
 ### 「時間」プロパティの数式
 
@@ -145,49 +148,46 @@ Content-Type: application/json
 
 ---
 
-## 5. v2 で同期を作るときの設計方針
+## 5. 実装した設計（Phase 2.5）
 
 ### 5.1 ローカルが正、Notion は写し
 
 TaskTimer の Room DB を**唯一の真実**とし、Notion へは一方向に push する。
-双方向同期は競合解決が地獄になるので v2 でもやらない。
+双方向同期は競合解決が地獄になるのでやらない。
 
-### 5.2 同期キューを持つ
+### 5.2 送信待ち行列
 
 オフラインでも計測は止まらないことが最優先。
 
-```
-SyncQueue テーブル
-  id, sessionId, operation (CREATE/UPDATE), payload, status, retryCount, lastError
-```
+- `sync_queue` テーブル（id, sessionId, operation = CREATE/FINISH, status = PENDING/DONE/FAILED, retryCount, lastError, createdAt）
+- セッションの開始・終了と**同じトランザクション**で積む。延長では積まない
+- 「連携 ON 後に開始したセッションだけ送る」は、CREATE が積まれていないセッションの FINISH を積まないことで実現
+- WorkManager（ネット接続時のみ・指数バックオフ）が id 順に消化する。1 件の失敗で全体を止めないが、順序は守る
+- `Session.notionPageId` に作成したページ id を入れ、終了時の更新に使う
+- 直さないと通らない失敗（401 など）は FAILED に落として設定画面に出す。「再試行」で PENDING に戻す
+- 通信エラー・429・5xx は 15 回まで再送してから FAILED
 
-- セッションの開始・終了・延長のたびにキューに積む
-- WorkManager（`NetworkType.CONNECTED` 制約）でバックグラウンド送信
-- 失敗したら指数バックオフでリトライ
-- `Session` に `notionPageId: String?` を追加して、更新時に使う
+### 5.3 日またぎの分割は送信時に行う
 
-### 5.3 日またぎの分割は同期時に行う
+ローカルでは 1 レコードのまま保持する（`docs/01_SPEC.md` 6.1）。
+送るときだけ 0:00 で区間に切り、先頭区間は既存ページを「完了」に書き換え、2 日目以降は「完了」で新規作成する。
+区間の切り方は `splitSegmentsByDay()`、割り付けは `planFinish()`（どちらも純関数でテスト済み）。
 
-v1 の設計どおり、ローカルでは 1 レコードのまま保持する（`docs/01_SPEC.md` 6.1）。
-Notion へ送るときだけ、既存スキーマに合わせて日境界で分割して複数ページとして送る。
-
-`DailyAggregator.splitByDay()` をそのまま流用できる。
-
-**この方針を取るなら、GAS の 23:59 分割は不要になるので停止する。**
-アプリと GAS が両方分割すると二重分割で壊れる。**v2 実装時に必ず GAS を止めること。**
+**GAS の 23:59 分割は停止済み。** アプリと GAS が両方分割すると二重分割で壊れる。
 
 ### 5.4 トークンの保管
 
-Notion の Integration Token は機密情報。
+- ソースコードにハードコードしない
+- Android Keystore の AES/GCM 鍵で暗号化し、暗号文だけを DataStore に保存
+  （`EncryptedSharedPreferences` は非推奨になったので使わない）
+- 復号に失敗したら（鍵の無効化・バックアップ復元）例外にせず「再入力」を促す
+- 設定画面から入力する。DB ID も設定画面で変えられる（既定値は上の ID）
 
-- **ソースコードにハードコードしない**
-- `EncryptedSharedPreferences` または DataStore ＋ Android Keystore で暗号化して保存
-- 設定画面から入力させる
+### 5.5 運用上の注意
 
-### 5.5 移行期の運用
-
-v2 リリース時、既存の MacroDroid マクロと TaskTimer が両方 Notion に書くと重複する。
-**切り替えの日を決めて、MacroDroid のマクロを無効化してから TaskTimer の同期を有効にする。**
+- MacroDroid のマクロと GAS は停止済み。再び動かさない
+- 送信は成功したのに応答だけ届かなかった場合、再送で同じ行が 2 つできることがある（v1 では許容）
+- 日付の区切りは端末のタイムゾーンに従う
 
 ---
 

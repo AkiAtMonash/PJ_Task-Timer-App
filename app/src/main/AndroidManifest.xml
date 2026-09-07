@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 権限は使う Phase になってから足す（docs/05_ANDROID_CONSTRAINTS.md 1 章）。
-         Phase 0 は起動確認だけなので、まだ 1 つも要らない。 -->
+    <!-- 権限は使う Phase になってから足す（docs/05_ANDROID_CONSTRAINTS.md 1 章）。 -->
+
+    <!-- Notion API への送信（Phase 2.5）。INTERNET は通常権限なので実行時の許可は不要。
+         ACCESS_NETWORK_STATE は WorkManager の「ネット接続時のみ実行」制約が使う。 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:name=".TaskTimerApp"

@@ -17,12 +17,6 @@ import kotlinx.coroutines.launch
 /** 切り替えフローの 4 ステップ（docs/01_SPEC.md 4.3）。 */
 enum class SwitchStep { RATING, NAME, GOAL, PLANNED }
 
-/**
- * フローの目的。切り替え（次のタスクを開始）か中断（記録して停止）か。
- * 中断は Step 1 の評価後に停止する（Aki に確認済み）。
- */
-enum class SwitchMode { SWITCH, STOP }
-
 /** 次のセッションの下書き。Step 2〜4 で徐々に埋まる。 */
 data class TaskDraft(
     val name: String = "",
@@ -46,10 +40,15 @@ data class SwitchUiState(
     val error: String? = null,
 )
 
+/**
+ * 切り替えフロー。「前のタスクを評価して終える → 次のタスクを始める」を 1 本の流れで行う。
+ *
+ * 「評価だけして止める（中断）」という出口は用意しない。記録が止まっている瞬間を作らないのが
+ * このアプリの前提なので、終えるときは必ず次を始める（docs/01_SPEC.md 1 章・4.1）。
+ */
 class SwitchViewModel(
     private val sessionRepository: SessionRepository,
     private val presetRepository: PresetRepository,
-    private val mode: SwitchMode,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -58,8 +57,7 @@ class SwitchViewModel(
     val uiState: StateFlow<SwitchUiState> = _uiState.asStateFlow()
 
     init {
-        // 進行中セッションがあれば Step 1（評価）から、無ければ（未計測からの開始）
-        // Step 2（名前）から。mode = STOP のときは必ず進行中があるはずなので RATING 固定。
+        // 進行中セッションがあれば Step 1（評価）から、無ければ（初回起動）Step 2（名前）から。
         viewModelScope.launch {
             val running = sessionRepository.getRunningSession()
             val initialStep = if (running != null) SwitchStep.RATING else SwitchStep.NAME
@@ -83,29 +81,7 @@ class SwitchViewModel(
         val state = _uiState.value
         // ◯/✕ は理由が必須。空なら進ませない（UI 側でもボタンを無効化するが二重に守る）。
         if (state.rating != Rating.NORMAL && state.ratingNote.isBlank()) return
-
-        if (mode == SwitchMode.STOP) {
-            finishAndStop(state)
-        } else {
-            _uiState.update { it.copy(step = SwitchStep.NAME) }
-        }
-    }
-
-    private fun finishAndStop(state: SwitchUiState) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true) }
-            runCatching {
-                sessionRepository.finishSession(
-                    rating = state.rating,
-                    ratingNote = resolvedNote(state),
-                    endedAt = System.currentTimeMillis(),
-                )
-            }.onSuccess {
-                _uiState.update { it.copy(isSaving = false, done = true) }
-            }.onFailure { e ->
-                _uiState.update { it.copy(isSaving = false, error = e.message ?: "停止に失敗しました") }
-            }
-        }
+        _uiState.update { it.copy(step = SwitchStep.NAME) }
     }
 
     // ---- Step 2（次のタスク名） ----
@@ -240,7 +216,7 @@ class SwitchViewModel(
         return when (state.step) {
             SwitchStep.RATING -> false
             SwitchStep.NAME -> {
-                if (mode == SwitchMode.SWITCH && state.runningSession != null) {
+                if (state.runningSession != null) {
                     _uiState.update { it.copy(step = SwitchStep.RATING) }
                     true
                 } else {

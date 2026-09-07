@@ -7,10 +7,18 @@ import androidx.room.Transaction
 import androidx.room.Update
 import com.aki.tasktimer.data.db.entity.ExtensionEntity
 import com.aki.tasktimer.data.db.entity.SessionEntity
+import com.aki.tasktimer.data.db.entity.SyncQueueEntity
 import com.aki.tasktimer.data.model.Rating
 import com.aki.tasktimer.data.model.SessionStatus
+import com.aki.tasktimer.data.model.SyncOperation
 import com.aki.tasktimer.domain.elapsedMinutes
 import kotlinx.coroutines.flow.Flow
+
+/** [SessionDao.switchRunning] の結果。終えたセッションが無ければ finishedId は null。 */
+data class SwitchResult(
+    val finishedId: Long?,
+    val startedId: Long,
+)
 
 /**
  * セッションと延長の DAO。
@@ -18,6 +26,9 @@ import kotlinx.coroutines.flow.Flow
  * 状態を変える操作をすべて `@Transaction` の中に置いているのは、
  * 「進行中セッションを読む → 判断する → 書く」を不可分にするため。
  * 読みと書きを呼び出し側で分けると、その隙間で RUNNING が 2 件になりうる。
+ *
+ * Notion の送信待ち行列（sync_queue）への投入も同じトランザクションで行う。
+ * セッションは保存できたのに行列に積めなかった、という食い違いを作らないため。
  */
 @Dao
 abstract class SessionDao {
@@ -59,28 +70,45 @@ abstract class SessionDao {
     @Insert
     abstract suspend fun insertExtension(extension: ExtensionEntity): Long
 
+    @Insert
+    abstract suspend fun insertSyncQueue(item: SyncQueueEntity): Long
+
+    @Query("SELECT COUNT(*) FROM sync_queue WHERE sessionId = :sessionId AND operation = 'CREATE'")
+    abstract suspend fun countCreateQueued(sessionId: Long): Int
+
     // ---- トランザクション ----
 
     /**
      * 進行中セッションが無いことを確認したうえで開始する。
      * すでにある場合は例外。黙って 2 件目を作ると、以降どちらが正なのか誰にも分からなくなる。
+     *
+     * @param enqueueSync true なら Notion の送信待ち行列に CREATE を積む（同期 ON のとき）
      */
     @Transaction
-    open suspend fun startExclusively(session: SessionEntity): Long {
+    open suspend fun startExclusively(session: SessionEntity, enqueueSync: Boolean): Long {
         val running = getRunning()
         check(running == null) {
             "進行中のセッション（id=${running?.id}, name=${running?.name}）があります。" +
-                "先に finish するか switch を使ってください"
+                "先に switch を使ってください"
         }
-        return insert(session)
+        val id = insert(session)
+        if (enqueueSync) enqueueCreate(id, session.startedAt)
+        return id
     }
 
     /**
-     * 進行中セッションを終える。次を開始しない「中断」用。
+     * 進行中セッションを終える。次を開始しない。
+     * 通常の操作では使わない（記録が止まる瞬間を作らないため）。デバッグ用の導線などから使う。
+     *
      * @return 終了したセッションの id
      */
     @Transaction
-    open suspend fun finishRunning(endedAt: Long, rating: Rating, ratingNote: String?): Long {
+    open suspend fun finishRunning(
+        endedAt: Long,
+        rating: Rating,
+        ratingNote: String?,
+        enqueueSync: Boolean,
+    ): Long {
         val running = checkNotNull(getRunning()) { "進行中のセッションがありません" }
         require(endedAt > running.startedAt) {
             "endedAt($endedAt) は startedAt(${running.startedAt}) より後でなければなりません"
@@ -93,6 +121,7 @@ abstract class SessionDao {
                 ratingNote = ratingNote,
             ),
         )
+        if (enqueueSync) enqueueFinishIfTracked(running.id, endedAt)
         return running.id
     }
 
@@ -103,7 +132,8 @@ abstract class SessionDao {
      * その差が「どのタスクでもない時間」として記録から抜け落ちる。
      * 進行中が無い場合は単に開始するだけなので、rating は不要。
      *
-     * @return 新しく開始したセッションの id
+     * 送信待ち行列には FINISH（前）→ CREATE（次）の順で積む。Notion 側で
+     * 「前が完了してから次が進行中になる」順序を id の昇順で保証するため。
      */
     @Transaction
     open suspend fun switchRunning(
@@ -111,7 +141,8 @@ abstract class SessionDao {
         rating: Rating?,
         ratingNote: String?,
         next: SessionEntity,
-    ): Long {
+        enqueueSync: Boolean,
+    ): SwitchResult {
         val running = getRunning()
         if (running != null) {
             checkNotNull(rating) { "進行中セッションを終えるには評価が必要です" }
@@ -126,8 +157,11 @@ abstract class SessionDao {
                     ratingNote = ratingNote,
                 ),
             )
+            if (enqueueSync) enqueueFinishIfTracked(running.id, at)
         }
-        return insert(next.copy(startedAt = at, status = SessionStatus.RUNNING, endedAt = null))
+        val startedId = insert(next.copy(startedAt = at, status = SessionStatus.RUNNING, endedAt = null))
+        if (enqueueSync) enqueueCreate(startedId, at)
+        return SwitchResult(finishedId = running?.id, startedId = startedId)
     }
 
     /**
@@ -136,6 +170,8 @@ abstract class SessionDao {
      *
      * elapsedAtExtension をここで計算しているのは、トランザクション内で読んだ
      * startedAt と必ず同じ行から導出するため。呼び出し側で計算すると値がずれうる。
+     *
+     * Notion には何も送らない。延長してもタスクは終わっていないので、ページは「進行中」のまま。
      *
      * @return 更新後のセッション（新しい期限を組み立てるのに使う）
      */
@@ -154,5 +190,25 @@ abstract class SessionDao {
         val updated = running.copy(totalPlannedMinutes = running.totalPlannedMinutes + minutes)
         update(updated)
         return updated
+    }
+
+    // ---- 送信待ち行列（トランザクション内から呼ぶ） ----
+
+    private suspend fun enqueueCreate(sessionId: Long, now: Long) {
+        insertSyncQueue(
+            SyncQueueEntity(sessionId = sessionId, operation = SyncOperation.CREATE, createdAt = now),
+        )
+    }
+
+    /**
+     * CREATE が積まれたことのあるセッションだけ FINISH を積む。
+     * 同期 OFF のときに始めたセッションは Notion にページが無いので、終了だけ送っても意味がない
+     * （「連携 ON 後に始めた分だけ送る」という決め事をここで実現している）。
+     */
+    private suspend fun enqueueFinishIfTracked(sessionId: Long, now: Long) {
+        if (countCreateQueued(sessionId) == 0) return
+        insertSyncQueue(
+            SyncQueueEntity(sessionId = sessionId, operation = SyncOperation.FINISH, createdAt = now),
+        )
     }
 }

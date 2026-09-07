@@ -22,6 +22,12 @@ data class Session(
     val status: SessionStatus,
     val rating: Rating?,
     val ratingNote: String?,
+    /**
+     * Notion 側に作ったページの id。開始時の送信が成功すると入る。
+     * 終了時はこのページを「完了」に書き換える。null なら Notion にまだページが無い
+     * （同期 OFF で始めた、または送信が失敗した）。
+     */
+    val notionPageId: String? = null,
 )
 
 enum class SessionStatus { RUNNING, DONE }

@@ -3,15 +3,17 @@ package com.aki.tasktimer.data.db
 import androidx.room.TypeConverter
 import com.aki.tasktimer.data.model.Rating
 import com.aki.tasktimer.data.model.SessionStatus
+import com.aki.tasktimer.data.model.SyncOperation
+import com.aki.tasktimer.data.model.SyncStatus
 import com.aki.tasktimer.data.model.Tag
 
 /**
  * enum ↔ DB 列の変換。
  *
  * Tag は enum 名（JOB_HUNTING）ではなく **label（"Job Hunting"）** を保存する。
- * v2 の Notion 同期と Phase 7 のエクスポートで、そのまま使える文字列にしておきたいため。
+ * Notion 同期と Phase 7 のエクスポートで、そのまま使える文字列にしておきたいため。
  *
- * SessionStatus / Rating は name() をそのまま使う。DAO のクエリで
+ * SessionStatus / Rating / SyncOperation / SyncStatus は name() をそのまま使う。DAO のクエリで
  * `WHERE status = 'RUNNING'` と直に書けるようにするため、この対応は変えないこと。
  */
 class Converters {
@@ -36,4 +38,16 @@ class Converters {
 
     @TypeConverter
     fun stringToRating(value: String?): Rating? = value?.let { Rating.valueOf(it) }
+
+    @TypeConverter
+    fun syncOperationToString(op: SyncOperation): String = op.name
+
+    @TypeConverter
+    fun stringToSyncOperation(value: String): SyncOperation = SyncOperation.valueOf(value)
+
+    @TypeConverter
+    fun syncStatusToString(status: SyncStatus): String = status.name
+
+    @TypeConverter
+    fun stringToSyncStatus(value: String): SyncStatus = SyncStatus.valueOf(value)
 }

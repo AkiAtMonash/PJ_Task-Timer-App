@@ -29,6 +29,8 @@ data class SessionEntity(
     val status: SessionStatus,
     val rating: Rating?,
     val ratingNote: String?,
+    // DB version 2 で追加。既存行は null のまま（Notion 側にページが無い）。
+    val notionPageId: String? = null,
 )
 
 fun SessionEntity.toDomain(): Session = Session(
@@ -43,6 +45,7 @@ fun SessionEntity.toDomain(): Session = Session(
     status = status,
     rating = rating,
     ratingNote = ratingNote,
+    notionPageId = notionPageId,
 )
 
 fun Session.toEntity(): SessionEntity = SessionEntity(
@@ -57,4 +60,5 @@ fun Session.toEntity(): SessionEntity = SessionEntity(
     status = status,
     rating = rating,
     ratingNote = ratingNote,
+    notionPageId = notionPageId,
 )

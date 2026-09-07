@@ -13,40 +13,66 @@ import java.time.ZoneId
  * 既存の Notion システムでは GAS が 23:59 にレコードを物理分割していたが、
  * アプリ側では分割しない（docs/01_SPEC.md 6.1）。
  * セッションは 1 レコードのまま持ち、表示のたびにここで按分する。
+ * Notion へ送るときだけ [splitSegmentsByDay] の区間ごとにページを分ける（docs/06 5.3）。
  */
 
 /**
- * セッションを日境界で按分する。
+ * 日境界で切った 1 区間。[startMillis] から [endMillis]（排他）まで。
+ * 隣り合う区間は前の end と次の start が同じ epoch になる（隙間も重なりも無い）。
+ */
+data class DaySegment(
+    val date: LocalDate,
+    val startMillis: Long,
+    val endMillis: Long,
+) {
+    val duration: Duration get() = Duration.ofMillis(endMillis - startMillis)
+}
+
+/**
+ * セッションを日境界で区間に切る。
  *
- * 境界は **その日の 0 時ちょうど**。23:00〜翌 07:00 なら当日 60 分・翌日 420 分になり、
- * 合計は必ず元のセッション長と一致する。
- *
- * ※ docs/01_SPEC.md 6.1 の例は「当日 59 分」と書かれているが、これは 23:59 で
- *   物理分割していた旧 GAS の挙動の名残と思われる。59 分にすると日境界ごとに
- *   1 分が消え、日別合計がセッション長と合わなくなるため 60 分としている。
+ * 境界は **その日の 0 時ちょうど**。23:00〜翌 07:00 なら
+ * 「29 日 23:00〜30 日 0:00」「30 日 0:00〜7:00」の 2 区間になる。
+ * 0 時ちょうどに終わる場合、翌日に長さ 0 の区間は作らない。
  *
  * タイムゾーンは引数で受ける。ZonedDateTime 経由で計算しているので、
- * 夏時間のある地域でも「実時間」で正しく按分される（日本には無いが、
- * 24 時間で割り算する実装にしてしまうと将来ここが壊れる）。
+ * 夏時間のある地域でも「実時間」で正しく切れる。
  *
  * 終了が開始以前なら空を返す。
  */
-fun splitByDay(startedAt: Long, endedAt: Long, zone: ZoneId): Map<LocalDate, Duration> {
-    if (endedAt <= startedAt) return emptyMap()
+fun splitSegmentsByDay(startedAt: Long, endedAt: Long, zone: ZoneId): List<DaySegment> {
+    if (endedAt <= startedAt) return emptyList()
 
     val end = Instant.ofEpochMilli(endedAt).atZone(zone)
     var cursor = Instant.ofEpochMilli(startedAt).atZone(zone)
-    val result = LinkedHashMap<LocalDate, Duration>()
+    val result = ArrayList<DaySegment>()
 
     while (cursor.isBefore(end)) {
         val date = cursor.toLocalDate()
         val nextDayStart = date.plusDays(1).atStartOfDay(zone)
         val segmentEnd = if (nextDayStart.isBefore(end)) nextDayStart else end
-        result[date] = Duration.between(cursor, segmentEnd)
+        result += DaySegment(
+            date = date,
+            startMillis = cursor.toInstant().toEpochMilli(),
+            endMillis = segmentEnd.toInstant().toEpochMilli(),
+        )
         cursor = segmentEnd
     }
     return result
 }
+
+/**
+ * セッションを日境界で按分する（日付 → その日に含まれる長さ）。
+ *
+ * ※ docs/01_SPEC.md 6.1 の例は「当日 59 分」と書かれているが、これは 23:59 で
+ *   物理分割していた旧 GAS の挙動の名残と思われる。59 分にすると日境界ごとに
+ *   1 分が消え、日別合計がセッション長と合わなくなるため 60 分としている。
+ *
+ * 区間の切り方は [splitSegmentsByDay] に一本化してある。ここは長さに畳むだけ。
+ */
+fun splitByDay(startedAt: Long, endedAt: Long, zone: ZoneId): Map<LocalDate, Duration> =
+    splitSegmentsByDay(startedAt, endedAt, zone)
+        .associateTo(LinkedHashMap()) { it.date to it.duration }
 
 /**
  * 日別・タグ別の合計。
