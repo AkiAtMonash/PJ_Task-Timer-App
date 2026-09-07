@@ -196,6 +196,7 @@ class SwitchViewModel(
     companion object {
         // 予定時間プリセット。仕様 3 章に頻度を記録するテーブルが無いため固定値
         // （docs/01_SPEC.md 4.3 とワイヤーフレームの表示に合わせる）。
-        val PLANNED_MINUTE_PRESETS = listOf(15, 25, 30, 45, 60, 90, 120)
+        // 2026-09-07 Aki の希望で 10 / 50 / 180 / 240 を追加、25 / 45 / 90 を削除。
+        val PLANNED_MINUTE_PRESETS = listOf(10, 15, 30, 50, 60, 120, 180, 240)
     }
 }
