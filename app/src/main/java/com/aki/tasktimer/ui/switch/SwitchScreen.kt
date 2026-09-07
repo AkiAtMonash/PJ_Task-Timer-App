@@ -13,13 +13,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -31,9 +36,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,7 +56,6 @@ import com.aki.tasktimer.domain.overrunRate
 import com.aki.tasktimer.ui.component.Pill
 import com.aki.tasktimer.ui.component.PrimaryButton
 import com.aki.tasktimer.ui.component.RatingSelector
-import com.aki.tasktimer.ui.component.SecondaryButton
 import com.aki.tasktimer.ui.component.TagChip
 import com.aki.tasktimer.ui.theme.InkVariant
 import com.aki.tasktimer.ui.theme.OnInk
@@ -56,9 +64,8 @@ import com.aki.tasktimer.ui.theme.Warn
 import com.aki.tasktimer.ui.theme.color
 import com.aki.tasktimer.ui.util.formatElapsed
 
-// 予定時間プリセット。仕様 3 章に頻度を記録するテーブルが無いため固定値
-// （docs/01_SPEC.md 4.3 Step 4 とワイヤーフレームの表示に合わせる）。
-private val PLANNED_MINUTE_PRESETS = listOf(15, 25, 30, 45, 60, 90, 120)
+/** 名前のプリセットは、スクロールせずに見える数に絞る（docs/01_SPEC.md 4.3 Step 2：6〜8 個）。 */
+private const val MAX_VISIBLE_PRESETS = 8
 
 @Composable
 fun SwitchScreen(
@@ -88,18 +95,9 @@ fun SwitchScreen(
         ) {
             when (uiState.step) {
                 SwitchStep.RATING -> RatingStep(uiState, viewModel)
-                SwitchStep.NAME -> TaskNameStep(uiState, viewModel)
-                SwitchStep.GOAL -> GoalStep(uiState, viewModel)
-                SwitchStep.PLANNED -> PlannedTimeStep(uiState, viewModel)
+                SwitchStep.FORM -> TaskFormStep(uiState, viewModel)
             }
         }
-    }
-
-    if (uiState.showTagPicker) {
-        TagPickerDialog(
-            onSelect = viewModel::selectTag,
-            onDismiss = viewModel::dismissTagPicker,
-        )
     }
 
     uiState.error?.let { error ->
@@ -116,16 +114,17 @@ fun SwitchScreen(
 private fun RatingStep(state: SwitchUiState, viewModel: SwitchViewModel) {
     val session = state.runningSession
     if (session == null) {
-        // 進行中が無いときは NAME から始まるのでここには来ないが、防御として空にしない。
+        // 進行中が無いときは FORM から始まるのでここには来ないが、防御として空にしない。
         Text("評価するセッションがありません", color = OnInkMuted)
         return
     }
+    val keyboard = LocalSoftwareKeyboardController.current
     // 評価はその瞬間の経過で十分。ティックは要らないので静的なスナップショットにする。
     val now = remember { System.currentTimeMillis() }
     val elapsed = elapsedMinutes(session.startedAt, now)
     val rate = overrunRate(elapsed, session.plannedMinutes)
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().imePadding()) {
         TagChip(tag = session.tag)
         Text(
             text = session.name,
@@ -181,12 +180,14 @@ private fun RatingStep(state: SwitchUiState, viewModel: SwitchViewModel) {
 
         if (state.rating != Rating.NORMAL) {
             Spacer(modifier = Modifier.height(16.dp))
+            // 1 行固定。キーボードの右下ボタン（完了）で入力を終えてキーボードを閉じる。
             OutlinedTextField(
                 value = state.ratingNote,
                 onValueChange = viewModel::setRatingNote,
                 label = { Text(if (state.rating == Rating.GOOD) "なぜ良かったか" else "なぜ悪かったか") },
-                singleLine = false,
-                minLines = 2,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { keyboard?.hide() }),
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -202,179 +203,151 @@ private fun RatingStep(state: SwitchUiState, viewModel: SwitchViewModel) {
     }
 }
 
+/**
+ * 次のタスクの入力を 1 画面にまとめたフォーム（2026-09-07、Aki の要望）。
+ * 上から：名前のプリセット → 名前 → タグ（3×2）→ ゴール → 予定時間 → 開始。
+ * キーボードの右下ボタンで 名前 → ゴール → 予定時間 と進み、最後は完了でキーボードが閉じる。
+ * キーボードが出ている間だけスクロールできる（出ていなければ 1 画面に収まる）。
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TaskNameStep(state: SwitchUiState, viewModel: SwitchViewModel) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = "次は何をする？",
-            color = OnInk,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+private fun TaskFormStep(state: SwitchUiState, viewModel: SwitchViewModel) {
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val draft = state.draft
 
-        if (state.isNewTaskInput) {
+    Column(modifier = Modifier.fillMaxSize().imePadding()) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Text(
+                text = "次は何をする？",
+                color = OnInk,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            if (state.presets.isNotEmpty()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    state.presets.take(MAX_VISIBLE_PRESETS).forEach { preset ->
+                        Pill(
+                            text = preset.name,
+                            selected = preset.name == draft.name,
+                            onClick = {
+                                viewModel.selectPreset(preset)
+                                focus.clearFocus()
+                                keyboard?.hide()
+                            },
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             OutlinedTextField(
-                value = state.newTaskName,
-                onValueChange = viewModel::setNewTaskName,
-                label = { Text("新しいタスク名") },
+                value = draft.name,
+                onValueChange = viewModel::setName,
+                label = { Text("タスク名") },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
                 modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            PrimaryButton(
-                text = "次へ",
-                onClick = viewModel::confirmNewTaskName,
-                enabled = state.newTaskName.isNotBlank(),
+
+            Spacer(modifier = Modifier.height(14.dp))
+            SectionLabel("タグ")
+            TagGrid(selected = draft.tag, onSelect = viewModel::selectTag)
+
+            Spacer(modifier = Modifier.height(14.dp))
+            OutlinedTextField(
+                value = draft.goal,
+                onValueChange = viewModel::setGoal,
+                label = { Text("ゴール（省略可）") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
+                modifier = Modifier.fillMaxWidth(),
             )
-        } else {
+
+            Spacer(modifier = Modifier.height(14.dp))
+            SectionLabel("何分でやる？")
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                state.presets.forEach { preset ->
+                SwitchViewModel.PLANNED_MINUTE_PRESETS.forEach { minutes ->
                     Pill(
-                        text = preset.name,
-                        onClick = { viewModel.selectPreset(preset) },
+                        text = "$minutes",
+                        selected = draft.plannedMinutes == minutes && draft.plannedInput.isEmpty(),
+                        onClick = {
+                            viewModel.selectPlannedMinutes(minutes)
+                            focus.clearFocus()
+                            keyboard?.hide()
+                        },
                     )
                 }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Pill(
-                text = "＋ 新しいタスク…",
-                onClick = viewModel::enterNewTask,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun GoalStep(state: SwitchUiState, viewModel: SwitchViewModel) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        state.draft.tag?.let { TagChip(tag = it) }
-        Text(
-            text = state.draft.name,
-            color = OnInk,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "ゴールは？",
-            color = OnInk,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
-            value = state.draft.goal,
-            onValueChange = viewModel::setGoal,
-            placeholder = { Text("（省略可）") },
-            singleLine = false,
-            minLines = 2,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        Row {
-            SecondaryButton(
-                text = "スキップ",
-                onClick = viewModel::skipGoal,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            PrimaryButton(
-                text = "次へ",
-                onClick = viewModel::confirmGoal,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun PlannedTimeStep(state: SwitchUiState, viewModel: SwitchViewModel) {
-    val canStart = (state.draft.plannedMinutes ?: 0) > 0 && !state.isSaving
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        state.draft.tag?.let { TagChip(tag = it) }
-        Text(
-            text = state.draft.name,
-            color = OnInk,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "何分でやる？",
-            color = OnInk,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            PLANNED_MINUTE_PRESETS.forEach { minutes ->
-                Pill(
-                    text = "$minutes",
-                    selected = state.draft.plannedMinutes == minutes,
-                    onClick = { viewModel.selectPlannedMinutes(minutes) },
+                // 一番右：自由入力。ここが最後の項目なので、右下ボタンは完了。
+                OutlinedTextField(
+                    value = draft.plannedInput,
+                    onValueChange = viewModel::setPlannedMinutesInput,
+                    placeholder = { Text("自由", fontSize = 13.sp) },
+                    suffix = { Text("分", fontSize = 13.sp, color = OnInkMuted) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focus.clearFocus(); keyboard?.hide() }),
+                    textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
+                    modifier = Modifier
+                        .width(104.dp)
+                        .height(52.dp),
                 )
             }
+            Spacer(modifier = Modifier.height(12.dp))
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = state.draft.plannedMinutes?.toString() ?: "",
-            onValueChange = viewModel::setPlannedMinutesInput,
-            label = { Text("自由入力（分）") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Spacer(modifier = Modifier.weight(1f))
 
         PrimaryButton(
             text = "開始する",
             onClick = viewModel::start,
-            enabled = canStart,
+            enabled = state.canStart,
         )
     }
 }
 
 @Composable
-private fun TagPickerDialog(onSelect: (Tag) -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("タグを選ぶ") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Tag.entries.forEach { tag ->
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        color = OnInkMuted,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(bottom = 8.dp),
+    )
+}
+
+/** タグを 3 列 × 2 行で並べる。ダイアログを挟まず、その場で選べる。 */
+@Composable
+private fun TagGrid(selected: Tag?, onSelect: (Tag) -> Unit) {
+    val tags = Tag.entries
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        tags.chunked(3).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                row.forEach { tag ->
+                    val isSelected = tag == selected
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .weight(1f)
                             .clip(RoundedCornerShape(3.dp))
-                            .background(InkVariant)
+                            .background(if (isSelected) tag.color.copy(alpha = 0.18f) else InkVariant)
                             .clickable { onSelect(tag) }
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                            .padding(horizontal = 10.dp, vertical = 10.dp),
                     ) {
                         Box(
                             modifier = Modifier
@@ -382,17 +355,17 @@ private fun TagPickerDialog(onSelect: (Tag) -> Unit, onDismiss: () -> Unit) {
                                 .clip(CircleShape)
                                 .background(tag.color),
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = tag.label,
-                            color = tag.color,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            color = if (isSelected) tag.color else OnInk,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            maxLines = 1,
                         )
                     }
                 }
             }
-        },
-        confirmButton = {},
-    )
+        }
+    }
 }

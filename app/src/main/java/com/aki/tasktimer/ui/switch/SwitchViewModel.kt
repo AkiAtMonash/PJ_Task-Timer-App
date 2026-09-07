@@ -14,15 +14,21 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** 切り替えフローの 4 ステップ（docs/01_SPEC.md 4.3）。 */
-enum class SwitchStep { RATING, NAME, GOAL, PLANNED }
+/**
+ * 切り替えフローの 2 ステップ。
+ * 元は「評価 → 名前 → ゴール → 予定時間」の 4 画面だったが、次へを押し続けるのが面倒という
+ * Aki の要望で、名前・タグ・ゴール・予定時間を 1 画面（FORM）にまとめた（2026-09-07）。
+ */
+enum class SwitchStep { RATING, FORM }
 
-/** 次のセッションの下書き。Step 2〜4 で徐々に埋まる。 */
+/** 次のセッションの下書き。FORM で埋まる。 */
 data class TaskDraft(
     val name: String = "",
     val tag: Tag? = null,
     val goal: String = "",
     val plannedMinutes: Int? = null,
+    /** 予定時間の自由入力欄の文字列 */
+    val plannedInput: String = "",
 )
 
 data class SwitchUiState(
@@ -32,13 +38,13 @@ data class SwitchUiState(
     val rating: Rating = Rating.NORMAL,
     val ratingNote: String = "",
     val draft: TaskDraft = TaskDraft(),
-    val isNewTaskInput: Boolean = false,
-    val newTaskName: String = "",
-    val showTagPicker: Boolean = false,
     val isSaving: Boolean = false,
     val done: Boolean = false,
     val error: String? = null,
-)
+) {
+    val canStart: Boolean
+        get() = draft.name.isNotBlank() && draft.tag != null && (draft.plannedMinutes ?: 0) > 0 && !isSaving
+}
 
 /**
  * 切り替えフロー。「前のタスクを評価して終える → 次のタスクを始める」を 1 本の流れで行う。
@@ -57,13 +63,13 @@ class SwitchViewModel(
     val uiState: StateFlow<SwitchUiState> = _uiState.asStateFlow()
 
     init {
-        // 進行中セッションがあれば Step 1（評価）から、無ければ（初回起動）Step 2（名前）から。
+        // 進行中セッションがあれば評価から、無ければ（初回起動）入力フォームから。
         viewModelScope.launch {
             val running = sessionRepository.getRunningSession()
-            val initialStep = if (running != null) SwitchStep.RATING else SwitchStep.NAME
+            val initialStep = if (running != null) SwitchStep.RATING else SwitchStep.FORM
             _uiState.update { it.copy(runningSession = running, step = initialStep) }
         }
-        // プリセットは Step 2 の並び順を DAO のまま保つ。学習で増えるのに追従させる。
+        // プリセットは並び順を DAO のまま保つ。学習で増えるのに追従させる。
         viewModelScope.launch {
             presetRepository.observeTaskPresets().collect { presets ->
                 _uiState.update { it.copy(presets = presets) }
@@ -75,17 +81,18 @@ class SwitchViewModel(
 
     fun selectRating(rating: Rating) = _uiState.update { it.copy(rating = rating) }
 
-    fun setRatingNote(note: String) = _uiState.update { it.copy(ratingNote = note) }
+    fun setRatingNote(note: String) = _uiState.update { it.copy(ratingNote = note.replace("\n", " ")) }
 
     fun confirmRating() {
         val state = _uiState.value
         // ◯/✕ は理由が必須。空なら進ませない（UI 側でもボタンを無効化するが二重に守る）。
         if (state.rating != Rating.NORMAL && state.ratingNote.isBlank()) return
-        _uiState.update { it.copy(step = SwitchStep.NAME) }
+        _uiState.update { it.copy(step = SwitchStep.FORM) }
     }
 
-    // ---- Step 2（次のタスク名） ----
+    // ---- Step 2（次のタスク：名前・タグ・ゴール・予定時間を 1 画面で） ----
 
+    /** プリセットをタップすると前回のタグ・ゴール・予定時間が全部埋まる（docs/01_SPEC.md 3.3）。 */
     fun selectPreset(preset: TaskPreset) {
         _uiState.update {
             it.copy(
@@ -94,76 +101,40 @@ class SwitchViewModel(
                     tag = preset.tag,
                     goal = preset.lastGoal ?: "",
                     plannedMinutes = preset.lastPlannedMinutes,
+                    plannedInput = if (preset.lastPlannedMinutes in PLANNED_MINUTE_PRESETS) "" else preset.lastPlannedMinutes.toString(),
                 ),
-                step = SwitchStep.GOAL,
             )
         }
     }
 
-    fun enterNewTask() = _uiState.update { it.copy(isNewTaskInput = true) }
+    fun setName(name: String) =
+        _uiState.update { it.copy(draft = it.draft.copy(name = name.replace("\n", ""))) }
 
-    fun setNewTaskName(name: String) = _uiState.update { it.copy(newTaskName = name) }
+    fun selectTag(tag: Tag) = _uiState.update { it.copy(draft = it.draft.copy(tag = tag)) }
 
-    fun confirmNewTaskName() {
-        val name = _uiState.value.newTaskName.trim()
-        if (name.isBlank()) return
-        // 新規タスクはタグを選んでいないので、タグ選択を挟む（docs/01_SPEC.md 4.3 Step 2）。
-        _uiState.update {
-            it.copy(
-                draft = it.draft.copy(name = name),
-                showTagPicker = true,
-            )
-        }
-    }
-
-    fun selectTag(tag: Tag) {
-        _uiState.update {
-            it.copy(
-                draft = it.draft.copy(tag = tag),
-                showTagPicker = false,
-                step = SwitchStep.GOAL,
-            )
-        }
-    }
-
-    fun dismissTagPicker() = _uiState.update { it.copy(showTagPicker = false) }
-
-    // ---- Step 3（ゴール） ----
-
-    fun setGoal(goal: String) = _uiState.update { it.copy(draft = it.draft.copy(goal = goal)) }
-
-    fun confirmGoal() {
-        _uiState.update {
-            it.copy(draft = it.draft.copy(goal = it.draft.goal.trim()), step = SwitchStep.PLANNED)
-        }
-    }
-
-    fun skipGoal() {
-        _uiState.update {
-            it.copy(draft = it.draft.copy(goal = ""), step = SwitchStep.PLANNED)
-        }
-    }
-
-    // ---- Step 4（予定時間） ----
+    fun setGoal(goal: String) =
+        _uiState.update { it.copy(draft = it.draft.copy(goal = goal.replace("\n", " "))) }
 
     fun selectPlannedMinutes(minutes: Int) =
-        _uiState.update { it.copy(draft = it.draft.copy(plannedMinutes = minutes)) }
+        _uiState.update { it.copy(draft = it.draft.copy(plannedMinutes = minutes, plannedInput = "")) }
 
     fun setPlannedMinutesInput(text: String) {
         val trimmed = text.trim()
         val minutes = if (trimmed.isEmpty()) null else trimmed.toIntOrNull()
         // 数値以外は受け付けない（無視）。空入力は「未選択」に戻す。
         if (trimmed.isNotEmpty() && minutes == null) return
-        _uiState.update { it.copy(draft = it.draft.copy(plannedMinutes = minutes)) }
+        _uiState.update {
+            it.copy(draft = it.draft.copy(plannedMinutes = minutes?.takeIf { m -> m > 0 }, plannedInput = trimmed))
+        }
     }
 
     fun start() {
         val state = _uiState.value
+        if (!state.canStart) return
         val draft = state.draft
         val tag = draft.tag ?: return
         val planned = draft.plannedMinutes ?: return
         val name = draft.name.trim()
-        if (name.isBlank() || planned <= 0) return
 
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
@@ -205,17 +176,9 @@ class SwitchViewModel(
      */
     fun handleBack(): Boolean {
         val state = _uiState.value
-        if (state.showTagPicker) {
-            _uiState.update { it.copy(showTagPicker = false) }
-            return true
-        }
-        if (state.isNewTaskInput) {
-            _uiState.update { it.copy(isNewTaskInput = false, newTaskName = "") }
-            return true
-        }
         return when (state.step) {
             SwitchStep.RATING -> false
-            SwitchStep.NAME -> {
+            SwitchStep.FORM -> {
                 if (state.runningSession != null) {
                     _uiState.update { it.copy(step = SwitchStep.RATING) }
                     true
@@ -223,18 +186,16 @@ class SwitchViewModel(
                     false
                 }
             }
-            SwitchStep.GOAL -> {
-                _uiState.update { it.copy(step = SwitchStep.NAME) }
-                true
-            }
-            SwitchStep.PLANNED -> {
-                _uiState.update { it.copy(step = SwitchStep.GOAL) }
-                true
-            }
         }
     }
 
     /** △（普通）は理由を自動で「特に無し」にする（docs/01_SPEC.md 4.3 Step 1）。 */
     private fun resolvedNote(state: SwitchUiState): String =
         if (state.rating == Rating.NORMAL) "特に無し" else state.ratingNote.trim()
+
+    companion object {
+        // 予定時間プリセット。仕様 3 章に頻度を記録するテーブルが無いため固定値
+        // （docs/01_SPEC.md 4.3 とワイヤーフレームの表示に合わせる）。
+        val PLANNED_MINUTE_PRESETS = listOf(15, 25, 30, 45, 60, 90, 120)
+    }
 }
