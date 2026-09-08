@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -22,8 +23,12 @@ import com.aki.tasktimer.ui.theme.Outline
 
 /**
  * 選択式のピル（ワイヤーフレームの .pill）。
- * タスク名プリセット（Step 2）と予定時間プリセット（Step 4）で共用する。
+ * タスク名プリセットと予定時間プリセットで共用する。
  * 選択中は操作色（Accent）の地と罫線になる。
+ *
+ * [accent] を渡すと、その色で縁を塗る。タスク名の候補にタグ色を渡して、
+ * 一覧のどれがどのタグのタスクか一目で分かるようにするため（2026-09-07 Aki の要望）。
+ * 予定時間のようにタグを持たないものは渡さない。
  */
 @Composable
 fun Pill(
@@ -31,11 +36,19 @@ fun Pill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     selected: Boolean = false,
+    accent: Color? = null,
 ) {
     val shape = RoundedCornerShape(3.dp)
-    val background = if (selected) Accent.copy(alpha = 0.16f) else InkVariant
-    val border = if (selected) BorderStroke(1.dp, Accent) else BorderStroke(1.dp, Outline)
-    val contentColor = if (selected) Accent else OnInk
+    val accentColor = accent ?: Accent
+    val background = if (selected) accentColor.copy(alpha = 0.16f) else InkVariant
+    // 縁：タグ色があれば常にその色。無ければ従来どおり（選択中だけ操作色）。
+    // 縁が全部色付きになると選択中が分かりにくいので、選択中はさらに太くして区別する。
+    val border = when {
+        selected -> BorderStroke(2.dp, accentColor)
+        accent != null -> BorderStroke(1.5.dp, accent)
+        else -> BorderStroke(1.dp, Outline)
+    }
+    val contentColor = if (selected) accentColor else OnInk
 
     Box(
         modifier = modifier

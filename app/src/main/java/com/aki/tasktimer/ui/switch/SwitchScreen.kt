@@ -272,6 +272,8 @@ private fun TaskFormStep(state: SwitchUiState, viewModel: SwitchViewModel) {
                         Pill(
                             text = preset.name,
                             selected = preset.name == draft.name,
+                            // 縁を前回のタグの色で塗る。どれがどのタグのタスクか一目で分かる。
+                            accent = preset.tag.color,
                             onClick = {
                                 viewModel.selectPreset(preset)
                                 focus.clearFocus()
