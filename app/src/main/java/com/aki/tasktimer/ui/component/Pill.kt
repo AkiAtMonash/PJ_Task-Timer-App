@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -13,12 +14,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aki.tasktimer.ui.theme.Accent
 import com.aki.tasktimer.ui.theme.InkVariant
 import com.aki.tasktimer.ui.theme.OnInk
+import com.aki.tasktimer.ui.theme.OnInkMuted
 import com.aki.tasktimer.ui.theme.Outline
 
 /**
@@ -37,6 +40,7 @@ fun Pill(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
     accent: Color? = null,
+    subText: String? = null,
 ) {
     val shape = RoundedCornerShape(3.dp)
     val accentColor = accent ?: Accent
@@ -59,11 +63,22 @@ fun Pill(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = text,
-            color = contentColor,
-            fontSize = 14.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = text,
+                color = contentColor,
+                fontSize = 14.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            )
+            // 押した結果どうなるかを小さく添える（超過画面の「計 57分」）。
+            if (subText != null) {
+                Text(
+                    text = subText,
+                    color = OnInkMuted,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+        }
     }
 }

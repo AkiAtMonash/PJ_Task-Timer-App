@@ -70,22 +70,12 @@ class OverdueViewModel(
         }
     }
 
-    fun select(minutes: Int) = _uiState.update { it.copy(selectedMinutes = minutes, customInput = "") }
-
-    /** 自由入力。数字以外は無視。空にすると未選択に戻る。 */
-    fun setCustomInput(text: String) {
-        val trimmed = text.trim()
-        val minutes = if (trimmed.isEmpty()) null else trimmed.toIntOrNull()
-        if (trimmed.isNotEmpty() && minutes == null) return
-        _uiState.update {
-            it.copy(customInput = trimmed, selectedMinutes = minutes?.takeIf { m -> m > 0 })
-        }
-    }
-
-    fun extend() {
-        val state = _uiState.value
-        val minutes = state.selectedMinutes ?: return
-        if (state.isSaving) return
+    /**
+     * 延長プリセットを押したら、確認を挟まずそのまま延長する（2026-09-09 Aki の要望）。
+     * 押す前に総量が分かるよう、各ボタンには「計○○分」を併記してある。
+     */
+    fun extendBy(minutes: Int) {
+        if (minutes <= 0 || _uiState.value.isSaving) return
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
             runCatching {
@@ -98,6 +88,21 @@ class OverdueViewModel(
                 _uiState.update { it.copy(isSaving = false, error = e.message ?: "延長に失敗しました") }
             }
         }
+    }
+
+    /** 自由入力。数字以外は無視。空にすると未選択に戻る。 */
+    fun setCustomInput(text: String) {
+        val trimmed = text.trim()
+        val minutes = if (trimmed.isEmpty()) null else trimmed.toIntOrNull()
+        if (trimmed.isNotEmpty() && minutes == null) return
+        _uiState.update {
+            it.copy(customInput = trimmed, selectedMinutes = minutes?.takeIf { m -> m > 0 })
+        }
+    }
+
+    /** 自由入力ぶんの延長。入力中は毎文字で実行できないので、ここだけ確定操作が要る。 */
+    fun extend() {
+        extendBy(_uiState.value.selectedMinutes ?: return)
     }
 
     fun dismissError() = _uiState.update { it.copy(error = null) }

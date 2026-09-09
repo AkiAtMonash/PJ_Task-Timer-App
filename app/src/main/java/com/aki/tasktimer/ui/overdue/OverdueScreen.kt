@@ -13,7 +13,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalTextStyle
@@ -59,7 +63,7 @@ import com.aki.tasktimer.ui.theme.Warn
 @Composable
 fun OverdueScreen(
     state: OverdueUiState,
-    onSelect: (Int) -> Unit,
+    onExtendMinutes: (Int) -> Unit,
     onCustomInput: (String) -> Unit,
     onExtend: () -> Unit,
     onSwitchTask: () -> Unit,
@@ -83,6 +87,13 @@ fun OverdueScreen(
                         .padding(innerPadding)
                         .padding(horizontal = 16.dp, vertical = 24.dp),
                 ) {
+                  // 2 つの出口（延長・中断）は必ず画面内に置く。上の説明側だけスクロールさせる。
+                  // 横向きだと縦が足りず、下のボタンが画面外に出て逃げ道が押せなくなるため。
+                  Column(
+                      modifier = Modifier
+                          .weight(1f)
+                          .verticalScroll(rememberScrollState()),
+                  ) {
                     Text(
                         text = "予定時間を超過",
                         color = Warn,
@@ -152,54 +163,40 @@ fun OverdueScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         state.presets.forEach { preset ->
+                            // 押したら即延長。押す前に総量が分かるよう「計○○分」を併記する
+                            // （docs/01_SPEC.md 4.4-1、2026-09-09 に 1 タップ化）。
                             Pill(
                                 text = "+${preset.minutes}",
-                                selected = state.selectedMinutes == preset.minutes && state.customInput.isEmpty(),
-                                onClick = { onSelect(preset.minutes) },
+                                subText = "計 ${totalRequiredMinutes(elapsed, preset.minutes)}分",
+                                onClick = { onExtendMinutes(preset.minutes) },
                             )
                         }
                         // 一番右：自由入力。プリセットに無い分数を使いたいとき用。
+                        // ここだけは毎文字で延長できないので、下の「延長する」で確定させる。
                         OutlinedTextField(
                             value = state.customInput,
                             onValueChange = onCustomInput,
                             placeholder = { Text("自由", fontSize = 13.sp) },
                             suffix = { Text("分", fontSize = 13.sp, color = OnInkMuted) },
                             singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Done,
+                            ),
+                            keyboardActions = KeyboardActions(onDone = { onExtend() }),
                             textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
                             modifier = Modifier
                                 .width(104.dp)
-                                .height(52.dp),
+                                .height(60.dp),
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+                  }
 
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = "合計所要時間",
-                            color = OnInkMuted,
-                            fontSize = 10.sp,
-                            letterSpacing = 2.sp,
-                            fontFamily = FontFamily.Monospace,
-                        )
-                        // ★ ここだけが更新される。各ボタンに合計を併記しない（docs/01_SPEC.md 4.4-1）。
-                        Text(
-                            text = "${total}分",
-                            color = OnInk,
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.Monospace,
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.weight(1f))
-
+                    // 自由入力を打ったときだけ押せる。プリセットは押した時点で延長済み。
                     PrimaryButton(
-                        text = "延長する",
+                        text = if (state.selectedMinutes != null) "延長する（計 ${total}分）" else "延長する",
                         onClick = onExtend,
                         enabled = state.selectedMinutes != null && !state.isSaving,
                     )

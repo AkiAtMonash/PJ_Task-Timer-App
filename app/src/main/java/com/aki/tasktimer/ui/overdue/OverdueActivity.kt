@@ -107,7 +107,7 @@ private fun OverdueRoute(
 
     OverdueScreen(
         state = uiState,
-        onSelect = viewModel::select,
+        onExtendMinutes = viewModel::extendBy,
         onCustomInput = viewModel::setCustomInput,
         onExtend = viewModel::extend,
         onSwitchTask = onSwitchTask,
