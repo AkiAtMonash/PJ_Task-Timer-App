@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.FlowRowOverflow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +18,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,8 +57,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aki.tasktimer.TaskTimerApp
 import com.aki.tasktimer.data.model.Rating
 import com.aki.tasktimer.data.model.Tag
+import com.aki.tasktimer.domain.CandidateLayoutSpec
 import com.aki.tasktimer.domain.elapsedMinutes
 import com.aki.tasktimer.domain.overrunRate
+import com.aki.tasktimer.domain.visibleCandidateCount
+import com.aki.tasktimer.ui.component.CandidateBlock
 import com.aki.tasktimer.ui.component.Pill
 import com.aki.tasktimer.ui.component.PrimaryButton
 import com.aki.tasktimer.ui.component.RatingSelector
@@ -70,11 +73,11 @@ import com.aki.tasktimer.ui.theme.Warn
 import com.aki.tasktimer.ui.theme.color
 import com.aki.tasktimer.ui.util.formatElapsed
 
-/**
- * 名前のプリセット 1 行ぶんの高さ（ピルの高さ ＋ 行間）。
- * 「余白が埋まるまで候補を出し、それ以上は使用頻度の低いものから消す」ための計算に使う。
- */
-private val PRESET_ROW_HEIGHT = 44.dp
+/** 候補ブロックどうしの隙間（縦・横とも）。 */
+private val CANDIDATE_GAP = 10.dp
+
+/** 画面の高さがまだ分からない最初の 1 フレームで出す候補の数。はみ出さない程度に控えめにする。 */
+private const val CANDIDATE_INITIAL_COUNT = 4
 
 @Composable
 fun SwitchScreen(
@@ -233,17 +236,26 @@ private fun TaskFormStep(state: SwitchUiState, viewModel: SwitchViewModel) {
     val density = LocalDensity.current
     val draft = state.draft
 
-    // 候補（プリセット）に使える行数を、画面の余白から決める。
+    // 候補（プリセット）を何個出すかを、画面の余白から決める。
     // キーボードを出していない状態の画面の高さから、候補以外の部分（入力欄・タグ・ボタン等）の高さを引き、
-    // 残りに何行入るかを数える。候補は使用頻度順なので、入りきらない分＝頻度の低いものが自動的に落ちる。
+    // 残りに何個入るかを数える。候補は使用頻度順なので、入りきらない分＝頻度の低いものが自動的に落ちる。
     var otherContentHeightPx by remember { mutableIntStateOf(0) }
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val screenHeightPx = with(density) { maxHeight.toPx() }
-        val rowHeightPx = with(density) { PRESET_ROW_HEIGHT.toPx() }
-        val presetMaxLines = if (otherContentHeightPx == 0) {
-            2
+        // 長い名前は折り返して塊にする。横に最低 2 個は並ぶように上限を画面の半分にしている。
+        val maxBlockWidth = (maxWidth - CANDIDATE_GAP) / 2
+        val availableHeight = maxHeight - with(density) { otherContentHeightPx.toDp() }
+        val visibleCandidates = if (otherContentHeightPx == 0) {
+            minOf(state.presets.size, CANDIDATE_INITIAL_COUNT)
         } else {
-            ((screenHeightPx - otherContentHeightPx) / rowHeightPx).toInt().coerceIn(1, 8)
+            visibleCandidateCount(
+                names = state.presets.map { it.name },
+                spec = CandidateLayoutSpec(
+                    containerWidthDp = maxWidth.value,
+                    availableHeightDp = availableHeight.value,
+                    maxBlockWidthDp = maxBlockWidth.value,
+                    gapDp = CANDIDATE_GAP.value,
+                ),
+            )
         }
 
     Column(modifier = Modifier.fillMaxSize().imePadding()) {
@@ -260,35 +272,34 @@ private fun TaskFormStep(state: SwitchUiState, viewModel: SwitchViewModel) {
             )
             Spacer(modifier = Modifier.height(10.dp))
 
-            if (state.presets.isNotEmpty()) {
+            if (visibleCandidates > 0) {
                 FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    maxLines = presetMaxLines,
-                    overflow = FlowRowOverflow.Clip,
+                    horizontalArrangement = Arrangement.spacedBy(CANDIDATE_GAP),
+                    verticalArrangement = Arrangement.spacedBy(CANDIDATE_GAP),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    state.presets.forEach { preset ->
-                        Pill(
+                    state.presets.take(visibleCandidates).forEach { preset ->
+                        CandidateBlock(
                             text = preset.name,
-                            selected = preset.name == draft.name,
                             // 縁を前回のタグの色で塗る。どれがどのタグのタスクか一目で分かる。
                             accent = preset.tag.color,
+                            selected = preset.name == draft.name,
                             onClick = {
                                 viewModel.selectPreset(preset)
                                 focus.clearFocus()
                                 keyboard?.hide()
                             },
+                            modifier = Modifier.widthIn(max = maxBlockWidth),
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
             }
 
             Column(
                 modifier = Modifier.onSizeChanged { size ->
                     // 候補以外の高さ。見出し・候補との間隔・開始ボタンぶんも足しておく。
-                    val extra = with(density) { (14.sp.toPx() + 10.dp.toPx() + 12.dp.toPx() + 48.dp.toPx() + 8.dp.toPx()).toInt() }
+                    val extra = with(density) { (14.sp.toPx() + 10.dp.toPx() + 14.dp.toPx() + 48.dp.toPx() + 8.dp.toPx()).toInt() }
                     otherContentHeightPx = size.height + extra
                 },
             ) {
