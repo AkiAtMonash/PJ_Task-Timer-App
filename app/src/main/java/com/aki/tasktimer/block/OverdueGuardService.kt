@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
  * 状態は DB から導く（docs/02_ARCHITECTURE.md 5.1）：
  * - 「進行中セッションが期限を過ぎている」間だけ動く
  * - 次のタスクが始まる（進行中の id が変わる）か、延長で期限が未来になれば、自分で止まる
- * - 「中断して別のタスクへ」を押したか（acknowledged）だけはメモリ内で持つ。
+ * - 「タスクを終了する」を押したか（acknowledged）だけはメモリ内で持つ。
  *   押したらバイブは止めるが、覆いは次のタスクが始まるまで続ける
  *
  * 覆いは自アプリの画面が前面のときは外し、他アプリやホームに行ったら被せる。
@@ -141,7 +141,7 @@ class OverdueGuardService : Service() {
             return
         }
 
-        // バイブ：応答（中断して別のタスクへ／延長）まで鳴らし続ける。
+        // バイブ：応答（タスクを終了する／延長）まで鳴らし続ける。
         // 自アプリが前面から外れた瞬間（電源ボタンで画面が消えた等）にも鳴らし直す。
         if (!acknowledged && (!vibrating || s.foreground != lastForeground)) {
             container.vibration.startRepeating()

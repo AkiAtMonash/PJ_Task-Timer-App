@@ -20,6 +20,12 @@ class PresetRepository(private val presetDao: PresetDao) {
     fun observeTaskPresets(): Flow<List<TaskPreset>> =
         presetDao.observeTaskPresets().map { entities -> entities.map { it.toDomain() } }
 
+    /** 直近に使った順（固定したものを除く）。候補の「最近」欄に使う。 */
+    fun observeRecentTaskPresets(limit: Int): Flow<List<TaskPreset>> =
+        presetDao.observeRecentTaskPresets(limit).map { entities -> entities.map { it.toDomain() } }
+
+    suspend fun setTaskPresetPinned(id: Long, pinned: Boolean) = presetDao.setTaskPresetPinned(id, pinned)
+
     /**
      * セッション開始のたびに呼ぶ自動学習（docs/01_SPEC.md 3.3）。
      * 既存なら useCount++ ＋ 前回値の更新、無ければ useCount = 1 で作成。

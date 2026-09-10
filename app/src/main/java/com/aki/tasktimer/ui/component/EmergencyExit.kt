@@ -135,7 +135,7 @@ fun EmergencyExitConfirm(
             Text("強制的に閉じますか？", color = OnInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "バグで操作できなくなったとき用の非常口です。\nタスクは進行中のまま残り、次に「切り替える」を押すまでアプリは何もしません。",
+                text = "バグで操作できなくなったとき用の非常口です。\nタスクは進行中のまま残り、次に「タスクを終了する」を押すまでアプリは何もしません。",
                 color = OnInkMuted,
                 fontSize = 13.sp,
             )

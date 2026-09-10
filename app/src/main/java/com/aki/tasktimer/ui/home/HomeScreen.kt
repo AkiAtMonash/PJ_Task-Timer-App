@@ -202,7 +202,8 @@ private fun RunningHome(
 
         // 「中断（記録して停止）」は置かない。記録が止まっている瞬間を作らないのがこのアプリの前提で、
         // 「今のを終えて別のことを始める」は切り替えそのもの（docs/01_SPEC.md 4.1）。
-        PrimaryButton(text = "タスクを切り替える", onClick = onSwitch)
+        // ボタンの言葉は「終了する」（2026-09-10 Aki の希望）。押しても評価 → 次のタスクへ進むだけで、記録は止まらない。
+        PrimaryButton(text = "タスクを終了する", onClick = onSwitch)
     }
 }
 

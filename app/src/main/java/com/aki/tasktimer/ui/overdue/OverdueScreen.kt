@@ -202,7 +202,7 @@ fun OverdueScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     SecondaryButton(
-                        text = "中断して別のタスクへ",
+                        text = "タスクを終了する",
                         onClick = onSwitchTask,
                         enabled = !state.isSaving,
                     )

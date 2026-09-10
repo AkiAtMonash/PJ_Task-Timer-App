@@ -20,8 +20,19 @@ abstract class PresetDao {
 
     // ---- タスク名プリセット ----
 
-    @Query("SELECT * FROM task_presets ORDER BY useCount DESC, lastUsedAt DESC")
+    // 固定したものが先頭。固定どうし・固定なしどうしは回数順（docs/01_SPEC.md 3.3）。
+    @Query("SELECT * FROM task_presets ORDER BY isPinned DESC, useCount DESC, lastUsedAt DESC")
     abstract fun observeTaskPresets(): Flow<List<TaskPresetEntity>>
+
+    /**
+     * 候補の「最近」欄用。固定したものは「固定」欄に必ず出るので最初から除く。
+     * 回数順とは別の並びなので、UI で並べ替えずに SQL をもう 1 本持つ。
+     */
+    @Query("SELECT * FROM task_presets WHERE isPinned = 0 ORDER BY lastUsedAt DESC LIMIT :limit")
+    abstract fun observeRecentTaskPresets(limit: Int): Flow<List<TaskPresetEntity>>
+
+    @Query("UPDATE task_presets SET isPinned = :pinned WHERE id = :id")
+    abstract suspend fun setTaskPresetPinned(id: Long, pinned: Boolean)
 
     @Query("SELECT * FROM task_presets WHERE name = :name LIMIT 1")
     abstract suspend fun getTaskPresetByName(name: String): TaskPresetEntity?

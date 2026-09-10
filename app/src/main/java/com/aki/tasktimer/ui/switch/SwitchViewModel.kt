@@ -8,9 +8,13 @@ import com.aki.tasktimer.data.model.Tag
 import com.aki.tasktimer.data.model.TaskPreset
 import com.aki.tasktimer.data.repository.PresetRepository
 import com.aki.tasktimer.data.repository.SessionRepository
+import com.aki.tasktimer.domain.CandidateSections
+import com.aki.tasktimer.domain.RECENT_CANDIDATE_COUNT
+import com.aki.tasktimer.domain.buildCandidateSections
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -34,7 +38,8 @@ data class TaskDraft(
 data class SwitchUiState(
     val step: SwitchStep,
     val runningSession: Session?,
-    val presets: List<TaskPreset>,
+    /** 名前の候補。固定・よくやる・最近の 3 欄（件数の上限は適用済み、画面の余白に合わせた削りは画面側） */
+    val candidates: CandidateSections = CandidateSections(),
     val rating: Rating = Rating.NORMAL,
     val ratingNote: String = "",
     val draft: TaskDraft = TaskDraft(),
@@ -58,7 +63,7 @@ class SwitchViewModel(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
-        SwitchUiState(step = SwitchStep.RATING, runningSession = null, presets = emptyList()),
+        SwitchUiState(step = SwitchStep.RATING, runningSession = null),
     )
     val uiState: StateFlow<SwitchUiState> = _uiState.asStateFlow()
 
@@ -69,11 +74,13 @@ class SwitchViewModel(
             val initialStep = if (running != null) SwitchStep.RATING else SwitchStep.FORM
             _uiState.update { it.copy(runningSession = running, step = initialStep) }
         }
-        // プリセットは並び順を DAO のまま保つ。学習で増えるのに追従させる。
+        // 候補は並び順を DAO のまま保つ。学習や固定で変わるのに追従させる。
         viewModelScope.launch {
-            presetRepository.observeTaskPresets().collect { presets ->
-                _uiState.update { it.copy(presets = presets) }
-            }
+            combine(
+                presetRepository.observeTaskPresets(),
+                presetRepository.observeRecentTaskPresets(RECENT_CANDIDATE_COUNT),
+            ) { presets, recent -> buildCandidateSections(presets, recent) }
+                .collect { candidates -> _uiState.update { it.copy(candidates = candidates) } }
         }
     }
 
@@ -104,6 +111,20 @@ class SwitchViewModel(
                     plannedInput = if (preset.lastPlannedMinutes in PLANNED_MINUTE_PRESETS) "" else preset.lastPlannedMinutes.toString(),
                 ),
             )
+        }
+    }
+
+    /** 候補を上にスワイプ：固定する。固定欄に移るのは DB の変更が流れてきたとき。 */
+    fun pinPreset(preset: TaskPreset) = setPinned(preset, pinned = true)
+
+    /** 固定した候補を下にスワイプ：固定を外す。 */
+    fun unpinPreset(preset: TaskPreset) = setPinned(preset, pinned = false)
+
+    private fun setPinned(preset: TaskPreset, pinned: Boolean) {
+        if (preset.isPinned == pinned) return
+        viewModelScope.launch {
+            runCatching { presetRepository.setTaskPresetPinned(preset.id, pinned) }
+                .onFailure { e -> _uiState.update { it.copy(error = e.message ?: "固定の変更に失敗しました") } }
         }
     }
 

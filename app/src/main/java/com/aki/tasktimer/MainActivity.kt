@@ -17,7 +17,7 @@ import com.aki.tasktimer.ui.theme.TaskTimerTheme
 class MainActivity : ComponentActivity() {
 
     /**
-     * 「切り替えフローを開いて」という依頼の回数。超過画面の「中断して別のタスクへ」や
+     * 「切り替えフローを開いて」という依頼の回数。超過画面の「タスクを終了する」や
      * 覆いのタップから届く。値が増えるたびに NavHost が切り替え画面へ進む。
      */
     private var openSwitchRequest by mutableIntStateOf(0)
@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
             // 同じ Intent が再配達されても二重に反応しないよう、読んだら消す。
             intent.removeExtra(EXTRA_OPEN_SWITCH)
             openSwitchRequest++
-            // 超過画面はロック画面の上に出る。そこから「中断して別のタスクへ」で来たときは、
+            // 超過画面はロック画面の上に出る。そこから「タスクを終了する」で来たときは、
             // 評価〜開始までもロックの上で続けられるようにする（Aki の要望：途中でロック画面に戻らない）。
             setShowWhenLocked(true)
             setTurnScreenOn(true)

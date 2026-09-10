@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,10 +56,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aki.tasktimer.TaskTimerApp
 import com.aki.tasktimer.data.model.Rating
 import com.aki.tasktimer.data.model.Tag
-import com.aki.tasktimer.domain.CandidateLayoutSpec
+import com.aki.tasktimer.data.model.TaskPreset
+import com.aki.tasktimer.domain.CandidateGridSpec
+import com.aki.tasktimer.domain.CandidateSections
 import com.aki.tasktimer.domain.elapsedMinutes
 import com.aki.tasktimer.domain.overrunRate
-import com.aki.tasktimer.domain.visibleCandidateCount
+import com.aki.tasktimer.domain.fitCandidateSections
 import com.aki.tasktimer.ui.component.CandidateBlock
 import com.aki.tasktimer.ui.component.Pill
 import com.aki.tasktimer.ui.component.PrimaryButton
@@ -73,11 +74,8 @@ import com.aki.tasktimer.ui.theme.Warn
 import com.aki.tasktimer.ui.theme.color
 import com.aki.tasktimer.ui.util.formatElapsed
 
-/** 候補ブロックどうしの隙間（縦・横とも）。 */
-private val CANDIDATE_GAP = 10.dp
-
-/** 画面の高さがまだ分からない最初の 1 フレームで出す候補の数。はみ出さない程度に控えめにする。 */
-private const val CANDIDATE_INITIAL_COUNT = 4
+/** 候補欄の寸法。何個入るかの計算と、実際に描く大きさの両方にこれを使う（ずれると溢れる）。 */
+private val CANDIDATE_GRID = CandidateGridSpec()
 
 @Composable
 fun SwitchScreen(
@@ -238,24 +236,15 @@ private fun TaskFormStep(state: SwitchUiState, viewModel: SwitchViewModel) {
 
     // 候補（プリセット）を何個出すかを、画面の余白から決める。
     // キーボードを出していない状態の画面の高さから、候補以外の部分（入力欄・タグ・ボタン等）の高さを引き、
-    // 残りに何個入るかを数える。候補は使用頻度順なので、入りきらない分＝頻度の低いものが自動的に落ちる。
+    // 残りに収まるまで画面の下の欄（最近 → よくやる）から削る。固定だけは必ず全部出す。
     var otherContentHeightPx by remember { mutableIntStateOf(0) }
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        // 長い名前は折り返して塊にする。横に最低 2 個は並ぶように上限を画面の半分にしている。
-        val maxBlockWidth = (maxWidth - CANDIDATE_GAP) / 2
         val availableHeight = maxHeight - with(density) { otherContentHeightPx.toDp() }
-        val visibleCandidates = if (otherContentHeightPx == 0) {
-            minOf(state.presets.size, CANDIDATE_INITIAL_COUNT)
+        val candidates = if (otherContentHeightPx == 0) {
+            // 最初の 1 フレームは余白が分からない。溢れないよう固定だけ出し、測れた次のフレームで埋める。
+            state.candidates.copy(frequent = emptyList(), recent = emptyList())
         } else {
-            visibleCandidateCount(
-                names = state.presets.map { it.name },
-                spec = CandidateLayoutSpec(
-                    containerWidthDp = maxWidth.value,
-                    availableHeightDp = availableHeight.value,
-                    maxBlockWidthDp = maxBlockWidth.value,
-                    gapDp = CANDIDATE_GAP.value,
-                ),
-            )
+            fitCandidateSections(state.candidates, availableHeight.value, CANDIDATE_GRID)
         }
 
     Column(modifier = Modifier.fillMaxSize().imePadding()) {
@@ -272,27 +261,18 @@ private fun TaskFormStep(state: SwitchUiState, viewModel: SwitchViewModel) {
             )
             Spacer(modifier = Modifier.height(10.dp))
 
-            if (visibleCandidates > 0) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(CANDIDATE_GAP),
-                    verticalArrangement = Arrangement.spacedBy(CANDIDATE_GAP),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    state.presets.take(visibleCandidates).forEach { preset ->
-                        CandidateBlock(
-                            text = preset.name,
-                            // 縁を前回のタグの色で塗る。どれがどのタグのタスクか一目で分かる。
-                            accent = preset.tag.color,
-                            selected = preset.name == draft.name,
-                            onClick = {
-                                viewModel.selectPreset(preset)
-                                focus.clearFocus()
-                                keyboard?.hide()
-                            },
-                            modifier = Modifier.widthIn(max = maxBlockWidth),
-                        )
-                    }
-                }
+            if (!candidates.isEmpty) {
+                CandidateSectionsView(
+                    sections = candidates,
+                    selectedName = draft.name,
+                    onSelect = { preset ->
+                        viewModel.selectPreset(preset)
+                        focus.clearFocus()
+                        keyboard?.hide()
+                    },
+                    onPin = viewModel::pinPreset,
+                    onUnpin = viewModel::unpinPreset,
+                )
                 Spacer(modifier = Modifier.height(14.dp))
             }
 
@@ -371,6 +351,73 @@ private fun TaskFormStep(state: SwitchUiState, viewModel: SwitchViewModel) {
             enabled = state.canStart,
         )
     }
+    }
+}
+
+/**
+ * 候補の 3 欄（固定 → よくやる → 最近）。空の欄は見出しごと出さない。
+ * 高さは [CANDIDATE_GRID] どおりになるように組む。候補を何個出すかの計算がそれを前提にしている。
+ */
+@Composable
+private fun CandidateSectionsView(
+    sections: CandidateSections,
+    selectedName: String,
+    onSelect: (TaskPreset) -> Unit,
+    onPin: (TaskPreset) -> Unit,
+    onUnpin: (TaskPreset) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(CANDIDATE_GRID.sectionGapDp.dp)) {
+        // 固定した候補は下スワイプで外すだけ。すでに固定済みなので上スワイプは無反応にする。
+        CandidateGroup("固定", sections.pinned, selectedName, onSelect, onSwipeUp = null, onSwipeDown = onUnpin)
+        CandidateGroup("よくやる", sections.frequent, selectedName, onSelect, onSwipeUp = onPin, onSwipeDown = null)
+        CandidateGroup("最近", sections.recent, selectedName, onSelect, onSwipeUp = onPin, onSwipeDown = null)
+        // スワイプは見た目に手がかりが無いので、固定を 1 つも使っていない間だけ案内する。
+        if (sections.showPinHint) CandidateLabel("候補を上にスワイプすると固定できます")
+    }
+}
+
+@Composable
+private fun CandidateGroup(
+    label: String,
+    items: List<TaskPreset>,
+    selectedName: String,
+    onSelect: (TaskPreset) -> Unit,
+    onSwipeUp: ((TaskPreset) -> Unit)?,
+    onSwipeDown: ((TaskPreset) -> Unit)?,
+) {
+    if (items.isEmpty()) return
+    val gap = CANDIDATE_GRID.gapDp.dp
+    Column {
+        CandidateLabel(label)
+        Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+            items.chunked(CANDIDATE_GRID.columns).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(gap), modifier = Modifier.fillMaxWidth()) {
+                    row.forEach { preset ->
+                        CandidateBlock(
+                            text = preset.name,
+                            // 左端の帯を前回のタグの色で塗る。どれがどのタグのタスクか一目で分かる。
+                            accent = preset.tag.color,
+                            selected = preset.name == selectedName,
+                            onClick = { onSelect(preset) },
+                            onSwipeUp = onSwipeUp?.let { action -> { action(preset) } },
+                            onSwipeDown = onSwipeDown?.let { action -> { action(preset) } },
+                            height = CANDIDATE_GRID.blockHeightDp.dp,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    // 奇数個のとき最後の 1 個が横いっぱいに伸びないよう、空きマスで幅を揃える。
+                    repeat(CANDIDATE_GRID.columns - row.size) { Spacer(modifier = Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
+
+/** 欄の見出し。高さを CandidateGridSpec.labelHeightDp に固定して、計算と実際を揃える。 */
+@Composable
+private fun CandidateLabel(text: String) {
+    Box(modifier = Modifier.height(CANDIDATE_GRID.labelHeightDp.dp)) {
+        Text(text = text, color = OnInkMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 

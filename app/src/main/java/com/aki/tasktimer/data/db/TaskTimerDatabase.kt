@@ -34,7 +34,7 @@ import com.aki.tasktimer.data.db.entity.TaskPresetEntity
         ExtensionPresetEntity::class,
         SyncQueueEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -102,6 +102,19 @@ abstract class TaskTimerDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v2 → v3：候補の固定（2026-09-10）。task_presets に isPinned を足す（既存行は固定なし）。
+         *
+         * SQL は app/schemas/com.aki.tasktimer.data.db.TaskTimerDatabase/3.json の createSql と同一。
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "ALTER TABLE `task_presets` ADD COLUMN `isPinned` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
         fun build(context: Context): TaskTimerDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
@@ -109,7 +122,7 @@ abstract class TaskTimerDatabase : RoomDatabase() {
                 DB_NAME,
             )
                 .addCallback(seedCallback)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

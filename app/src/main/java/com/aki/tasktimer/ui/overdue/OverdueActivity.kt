@@ -61,7 +61,7 @@ class OverdueActivity : ComponentActivity() {
         }
     }
 
-    /** 「中断して別のタスクへ」：バイブを止め、切り替えフローへ。覆いは次のタスクが始まるまで続く。 */
+    /** 「タスクを終了する」：バイブを止め、切り替えフローへ。覆いは次のタスクが始まるまで続く。 */
     private fun goToSwitchFlow() {
         startGuardService(OverdueGuardService.ACTION_ACKNOWLEDGE)
         OverdueNotifications.cancelFullScreen(this)

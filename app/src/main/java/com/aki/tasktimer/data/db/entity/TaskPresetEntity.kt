@@ -1,5 +1,6 @@
 package com.aki.tasktimer.data.db.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -20,6 +21,13 @@ data class TaskPresetEntity(
     val lastPlannedMinutes: Int,
     val useCount: Int,
     val lastUsedAt: Long,
+    /**
+     * 自分で上に固定したか（2026-09-10）。回数で並べると「1 日 1 回だが必ずやる」ものが埋もれるため。
+     *
+     * 既存の行にも入る列なので DB 側の既定値を宣言している。宣言しないと Room の検証で
+     * 期待するスキーマ（既定値なし）と実際（既定値 0）がずれて起動時に落ちる。
+     */
+    @ColumnInfo(defaultValue = "0") val isPinned: Boolean = false,
 )
 
 fun TaskPresetEntity.toDomain(): TaskPreset = TaskPreset(
@@ -30,4 +38,5 @@ fun TaskPresetEntity.toDomain(): TaskPreset = TaskPreset(
     lastPlannedMinutes = lastPlannedMinutes,
     useCount = useCount,
     lastUsedAt = lastUsedAt,
+    isPinned = isPinned,
 )
