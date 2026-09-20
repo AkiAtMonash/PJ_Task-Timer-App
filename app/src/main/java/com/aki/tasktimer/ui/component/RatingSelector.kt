@@ -58,7 +58,28 @@ fun RatingSelector(
     selected: Rating,
     onSelect: (Rating) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * 横に 3 つ並べて 1 行に収める。横画面用。
+     * 縦に積むと 3 択だけで 150dp 使い、横画面では「次へ」が画面の外に出てしまう。
+     */
+    horizontal: Boolean = false,
 ) {
+    if (horizontal) {
+        Row(
+            modifier = modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            RATING_OPTIONS.forEach { option ->
+                RatingTile(
+                    option = option,
+                    isSelected = selected == option.rating,
+                    onClick = { onSelect(option.rating) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        return
+    }
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -70,6 +91,43 @@ fun RatingSelector(
                 onClick = { onSelect(option.rating) },
             )
         }
+    }
+}
+
+/**
+ * 横並び用の 1 つ分。記号の下にラベルを置く。
+ * 「理由を入力」の添え書きは入れない。すぐ下の入力欄のラベルが同じことを言っているため。
+ */
+@Composable
+private fun RatingTile(
+    option: RatingOption,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(3.dp)
+    val border = if (isSelected) BorderStroke(1.dp, Accent) else BorderStroke(1.dp, Outline)
+    Column(
+        modifier = modifier
+            .clip(shape)
+            .background(InkVariant)
+            .border(border, shape)
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = ratingSymbol(option.rating),
+            color = OnInk,
+            fontSize = 18.sp,
+            fontFamily = FontFamily.Monospace,
+        )
+        Text(
+            text = ratingLabel(option.rating),
+            color = OnInk,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 2.dp),
+        )
     }
 }
 
