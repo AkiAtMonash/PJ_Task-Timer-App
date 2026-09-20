@@ -43,6 +43,9 @@ data class SwitchUiState(
     val rating: Rating = Rating.NORMAL,
     val ratingNote: String = "",
     val draft: TaskDraft = TaskDraft(),
+    /** 音符ボタン。押してあるときだけ、開始と同時に Musicolet に再生を指示する。
+     *  TaskDraft ではなくここに置くのは、候補を選ぶと下書きが丸ごと入れ替わって消えてしまうため。 */
+    val playMusic: Boolean = false,
     val isSaving: Boolean = false,
     val done: Boolean = false,
     val error: String? = null,
@@ -60,6 +63,8 @@ data class SwitchUiState(
 class SwitchViewModel(
     private val sessionRepository: SessionRepository,
     private val presetRepository: PresetRepository,
+    /** 開始できたときに音楽を鳴らす。画面側が Musicolet への指示を差し込む。 */
+    private val startMusic: () -> Unit = {},
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -139,6 +144,9 @@ class SwitchViewModel(
     fun selectPlannedMinutes(minutes: Int) =
         _uiState.update { it.copy(draft = it.draft.copy(plannedMinutes = minutes, plannedInput = "")) }
 
+    /** 音符ボタン。覚えないので毎回 OFF から始まる（そのタスクの間だけの指定）。 */
+    fun toggleMusic() = _uiState.update { it.copy(playMusic = !it.playMusic) }
+
     fun setPlannedMinutesInput(text: String) {
         val trimmed = text.trim()
         val minutes = if (trimmed.isEmpty()) null else trimmed.toIntOrNull()
@@ -180,6 +188,7 @@ class SwitchViewModel(
                     usedAt = at,
                 )
             }.onSuccess {
+                if (state.playMusic) startMusic()
                 _uiState.update { it.copy(isSaving = false, done = true) }
             }.onFailure { e ->
                 _uiState.update { it.copy(isSaving = false, error = e.message ?: "開始に失敗しました") }

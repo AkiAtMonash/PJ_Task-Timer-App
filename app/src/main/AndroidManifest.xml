@@ -27,6 +27,12 @@
     <!-- 再起動後の期限の予約し直し。 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- タスク開始時に Musicolet へ再生を指示する。Android 11 以降、他アプリにブロードキャストを
+         宛てるには、ここで「そのアプリが見える」と宣言する必要がある。 -->
+    <queries>
+        <package android:name="in.krosbits.musicolet" />
+    </queries>
+
     <application
         android:name=".TaskTimerApp"
         android:allowBackup="true"

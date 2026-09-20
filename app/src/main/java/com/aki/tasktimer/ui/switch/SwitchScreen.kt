@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -60,6 +62,7 @@ import com.aki.tasktimer.data.model.TaskPreset
 import com.aki.tasktimer.domain.CandidateGridSpec
 import com.aki.tasktimer.domain.CandidateSections
 import com.aki.tasktimer.domain.elapsedMinutes
+import com.aki.tasktimer.music.playMusicolet
 import com.aki.tasktimer.domain.overrunRate
 import com.aki.tasktimer.domain.fitCandidateSections
 import com.aki.tasktimer.ui.component.CandidateBlock
@@ -84,7 +87,11 @@ fun SwitchScreen(
 ) {
     val app = LocalContext.current.applicationContext as TaskTimerApp
     val viewModel: SwitchViewModel = viewModel {
-        SwitchViewModel(app.container.sessionRepository, app.container.presetRepository)
+        SwitchViewModel(
+            app.container.sessionRepository,
+            app.container.presetRepository,
+            startMusic = { app.playMusicolet() },
+        )
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -345,11 +352,24 @@ private fun TaskFormStep(state: SwitchUiState, viewModel: SwitchViewModel) {
             }
         }
 
-        PrimaryButton(
-            text = "開始する",
-            onClick = viewModel::start,
-            enabled = state.canStart,
-        )
+        // 音符は右。右手の親指が届く側に置く（Aki の指定）。縦は開始ボタンと同じ高さに揃える。
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.height(IntrinsicSize.Min),
+        ) {
+            PrimaryButton(
+                text = "開始する",
+                onClick = viewModel::start,
+                enabled = state.canStart,
+                modifier = Modifier.weight(1f),
+            )
+            Pill(
+                text = "♪",
+                selected = state.playMusic,
+                onClick = viewModel::toggleMusic,
+                modifier = Modifier.fillMaxHeight().width(56.dp),
+            )
+        }
     }
     }
 }
