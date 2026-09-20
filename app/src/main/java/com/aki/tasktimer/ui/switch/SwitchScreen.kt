@@ -1,5 +1,7 @@
 package com.aki.tasktimer.ui.switch
 
+import android.content.res.Configuration
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -44,9 +46,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.SoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -57,6 +61,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aki.tasktimer.TaskTimerApp
 import com.aki.tasktimer.data.model.Rating
+import com.aki.tasktimer.data.model.Session
 import com.aki.tasktimer.data.model.Tag
 import com.aki.tasktimer.data.model.TaskPreset
 import com.aki.tasktimer.domain.CandidateGridSpec
@@ -90,7 +95,15 @@ fun SwitchScreen(
         SwitchViewModel(
             app.container.sessionRepository,
             app.container.presetRepository,
-            startMusic = { app.playMusicolet() },
+            // 鳴らせなかったときだけ知らせる。黙っていると、壊れているのか
+            // Musicolet の準備不足なのか区別がつかない（ADR 0001）。
+            startMusic = {
+                app.playMusicolet { playing ->
+                    if (!playing) {
+                        Toast.makeText(app, "Musicolet を鳴らせなかった", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
         )
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -141,7 +154,49 @@ private fun RatingStep(state: SwitchUiState, viewModel: SwitchViewModel) {
     val elapsed = elapsedMinutes(session.startedAt, now)
     val rate = overrunRate(elapsed, session.plannedMinutes)
 
+    // 横画面は縦が 350dp ほどしかなく、縦積みのままでは「次へ」が画面の外に出て進めなくなる。
+    // スクロールで逃がさず、見るもの（左）と触るもの（右）に分けて 1 画面に収める。
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    if (landscape) {
+        Row(
+            modifier = Modifier.fillMaxSize().imePadding(),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
+            RatingSummary(session, now, rate, modifier = Modifier.weight(1f))
+            RatingChoice(
+                state = state,
+                viewModel = viewModel,
+                keyboard = keyboard,
+                horizontalSelector = true,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            )
+        }
+        return
+    }
+
     Column(modifier = Modifier.fillMaxSize().imePadding()) {
+        RatingSummary(session, now, rate)
+        Spacer(modifier = Modifier.height(24.dp))
+        RatingChoice(
+            state = state,
+            viewModel = viewModel,
+            keyboard = keyboard,
+            horizontalSelector = false,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/** 評価画面の「見るもの」。タグ・タスク名・経過時間。 */
+@Composable
+private fun RatingSummary(
+    session: Session,
+    now: Long,
+    rate: Int,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
         TagChip(tag = session.tag)
         Text(
             text = session.name,
@@ -180,9 +235,19 @@ private fun RatingStep(state: SwitchUiState, viewModel: SwitchViewModel) {
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(24.dp))
-
+/** 評価画面の「触るもの」。3 択・コメント・次へ。 */
+@Composable
+private fun RatingChoice(
+    state: SwitchUiState,
+    viewModel: SwitchViewModel,
+    keyboard: SoftwareKeyboardController?,
+    horizontalSelector: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
         Text(
             text = "この時間の使い方は？",
             color = OnInk,
@@ -193,6 +258,7 @@ private fun RatingStep(state: SwitchUiState, viewModel: SwitchViewModel) {
         RatingSelector(
             selected = state.rating,
             onSelect = viewModel::selectRating,
+            horizontal = horizontalSelector,
         )
 
         Spacer(modifier = Modifier.height(16.dp))
