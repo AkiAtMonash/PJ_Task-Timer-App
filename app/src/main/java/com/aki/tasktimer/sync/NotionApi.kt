@@ -49,6 +49,26 @@ class NotionApi(
                 .build(),
         )
 
+    /**
+     * 「進行中」のページを一覧する。
+     *
+     * 照会そのものに失敗したら null を返す。呼び出し側は「分からなかった」として
+     * 通常どおり作りに行く（照会が理由で記録が残らないほうが困る）。
+     */
+    suspend fun queryRunningPages(token: String, databaseId: String): List<NotionPayload.PageRef>? =
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("$baseUrl/databases/$databaseId/query")
+                .post(NotionPayload.runningPagesQuery().toString().toRequestBody(JSON))
+                .headers(token)
+                .build()
+            runCatching {
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) NotionPayload.parsePageRefs(response.body?.string().orEmpty()) else null
+                }
+            }.getOrNull()
+        }
+
     suspend fun updatePage(token: String, pageId: String, body: JSONObject): NotionResult =
         execute(
             Request.Builder()

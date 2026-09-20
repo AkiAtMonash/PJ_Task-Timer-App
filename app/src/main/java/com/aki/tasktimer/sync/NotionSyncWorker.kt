@@ -78,15 +78,32 @@ class NotionSyncWorker(
 
     /** 「進行中」ページを作り、ページ id を記録に紐づける。 */
     private suspend fun create(token: String, databaseId: String, session: Session, zone: ZoneId): NotionResult {
+        // 先に Notion へ聞く（ADR 0002）。端末が寝て送信が打ち切られると、Notion にはページが
+        // できているのにアプリは id を控えられない。そのまま作り直すと 2 枚目ができ、1 枚目が
+        // 「進行中」のまま取り残される。実際に 2026-09 に 7 件溜まった。
+        adopt(token, databaseId, session)?.let { return NotionResult.Ok(it) }
+
         val result = api.createPage(token, NotionPayload.createRunningPage(databaseId, session, zone))
         if (result is NotionResult.Ok) queueDao.setNotionPageId(session.id, result.pageId)
         return result
     }
 
     /**
+     * 開始時刻が一致する「進行中」ページが Notion にすでにあれば、それを自分のものとして引き取る。
+     * 照会できなかった／無かったときは null（呼び出し側は今までどおり作る）。
+     */
+    private suspend fun adopt(token: String, databaseId: String, session: Session): String? {
+        val pages = api.queryRunningPages(token, databaseId) ?: return null
+        val pageId = pages.firstOrNull { NotionPayload.sameStart(it.startMillis, session.startedAt) }?.id
+            ?: return null
+        queueDao.setNotionPageId(session.id, pageId)
+        return pageId
+    }
+
+    /**
      * 「完了」に書き換える。日をまたいでいれば 2 日目以降のページも作る。
      *
-     * 開始時の送信が失敗していて Notion にページが無い（notionPageId == null）場合は、
+     * ページ id を持っていない場合は Notion に聞き、それでも見つからなければ
      * 全区間を「完了」で新しく作る。終了だけ送れないのはもったいない。
      *
      * 途中で Retryable になった場合は行ごと再実行になる。PATCH は同じ値を書き直すだけなので
@@ -99,7 +116,9 @@ class NotionSyncWorker(
         val plan = planFinish(session.startedAt, endedAt, zone)
             ?: return NotionResult.ClientError(0, "終了が開始より前です（id=${session.id}）")
 
-        val pageId = session.notionPageId
+        // 開始時の送信が打ち切られていると notionPageId は空だが、Notion 側にはページがある。
+        // ここでも一度聞いて、あればそれを完了に書き換える（新しく作ると取り残しが残る）。
+        val pageId = session.notionPageId ?: adopt(token, databaseId, session)
         val firstResult: NotionResult = if (pageId != null) {
             api.updatePage(token, pageId, NotionPayload.finishPage(session, plan.patchSegment, zone))
         } else {

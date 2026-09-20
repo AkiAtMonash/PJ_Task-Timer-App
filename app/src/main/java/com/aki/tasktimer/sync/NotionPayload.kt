@@ -4,6 +4,7 @@ import com.aki.tasktimer.data.model.Rating
 import com.aki.tasktimer.data.model.Session
 import com.aki.tasktimer.domain.DaySegment
 import java.time.Instant
+import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -50,6 +51,51 @@ object NotionPayload {
             .atZone(zone)
             .truncatedTo(ChronoUnit.SECONDS)
             .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+
+    /**
+     * 照会で見つかった既存ページ。開始時刻の突き合わせにしか使わないので id と開始だけ持つ。
+     * [startMillis] は Notion の date.start を epoch millis に直したもの。
+     */
+    data class PageRef(val id: String, val startMillis: Long)
+
+    /**
+     * 「進行中」のページだけを引く POST /v1/databases/{id}/query の本文。
+     * 同じセッションのページを二重に作らないための照会に使う（ADR 0002）。
+     */
+    fun runningPagesQuery(): JSONObject =
+        JSONObject().put(
+            "filter",
+            JSONObject()
+                .put("property", PROP_STATUS)
+                .put("status", JSONObject().put("equals", STATUS_RUNNING)),
+        )
+
+    /**
+     * 照会の応答から「ページ id と開始時刻」を取り出す。
+     * time が無い／日付として読めない行は落とす。突き合わせに使えないので持っていても意味がない。
+     */
+    fun parsePageRefs(body: String): List<PageRef> {
+        val results = runCatching { JSONObject(body).getJSONArray("results") }.getOrNull() ?: return emptyList()
+        return (0 until results.length()).mapNotNull { i ->
+            val page = results.optJSONObject(i) ?: return@mapNotNull null
+            val id = page.optString("id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val start = page.optJSONObject("properties")
+                ?.optJSONObject(PROP_TIME)
+                ?.optJSONObject("date")
+                ?.optString("start")
+                ?.takeIf { it.isNotBlank() }
+                ?: return@mapNotNull null
+            val millis = runCatching { OffsetDateTime.parse(start).toInstant().toEpochMilli() }.getOrNull()
+                ?: return@mapNotNull null
+            PageRef(id, millis)
+        }
+    }
+
+    /**
+     * 同じ開始時刻か。送るときに秒未満を落としている（[toIso]）ので、比較も秒までで行う。
+     */
+    fun sameStart(pageStartMillis: Long, startedAt: Long): Boolean =
+        Math.floorDiv(pageStartMillis, 1000L) == Math.floorDiv(startedAt, 1000L)
 
     /** 開始時：「進行中」のページを作る POST /v1/pages の本文。 */
     fun createRunningPage(databaseId: String, session: Session, zone: ZoneId): JSONObject =

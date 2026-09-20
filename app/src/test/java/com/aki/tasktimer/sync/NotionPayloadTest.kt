@@ -197,3 +197,58 @@ class CreateCompletedPageTest {
         assertEquals(45, props.getJSONObject("予定時間（分）").getInt("number"))
     }
 }
+
+/**
+ * 取り残しページを作らないための照会まわり（ADR 0002）。
+ * ここが壊れると「進行中」が二重に増えるので、応答の読み取りと時刻の突き合わせを固定しておく。
+ */
+class NotionPayloadQueryTest {
+
+    @Test
+    fun `照会は進行中だけを引く`() {
+        val filter = NotionPayload.runningPagesQuery().getJSONObject("filter")
+        assertEquals("status", filter.getString("property"))
+        assertEquals("進行中", filter.getJSONObject("status").getString("equals"))
+    }
+
+    @Test
+    fun `応答からページ id と開始時刻を取り出す`() {
+        val body = """
+            {"results":[
+              {"id":"page-a","properties":{"time":{"date":{"start":"2026-07-29T14:00:00.000+09:00","end":null}}}},
+              {"id":"page-b","properties":{"time":{"date":{"start":"2026-07-29T15:30:00+09:00"}}}}
+            ]}
+        """.trimIndent()
+        val refs = NotionPayload.parsePageRefs(body)
+        assertEquals(listOf("page-a", "page-b"), refs.map { it.id })
+        assertEquals(jst(2026, 7, 29, 14, 0), refs[0].startMillis)
+        assertEquals(jst(2026, 7, 29, 15, 30), refs[1].startMillis)
+    }
+
+    @Test
+    fun `時刻が読めない行は落とす`() {
+        val body = """
+            {"results":[
+              {"id":"no-time","properties":{}},
+              {"id":"empty-date","properties":{"time":{"date":null}}},
+              {"id":"broken","properties":{"time":{"date":{"start":"きのう"}}}},
+              {"id":"ok","properties":{"time":{"date":{"start":"2026-07-29T14:00:00+09:00"}}}}
+            ]}
+        """.trimIndent()
+        assertEquals(listOf("ok"), NotionPayload.parsePageRefs(body).map { it.id })
+    }
+
+    @Test
+    fun `応答が壊れていても落ちない`() {
+        assertEquals(emptyList<NotionPayload.PageRef>(), NotionPayload.parsePageRefs("なにこれ"))
+        assertEquals(emptyList<NotionPayload.PageRef>(), NotionPayload.parsePageRefs("{}"))
+    }
+
+    @Test
+    fun `突き合わせは秒まで　ミリ秒の差は同じ扱い`() {
+        val startedAt = jst(2026, 7, 29, 14, 0, s = 3, ms = 480)
+        // 送るときに秒未満を落としているので、Notion 側は 14:00:03 ちょうどで返ってくる。
+        assertTrue(NotionPayload.sameStart(jst(2026, 7, 29, 14, 0, s = 3), startedAt))
+        assertFalse(NotionPayload.sameStart(jst(2026, 7, 29, 14, 0, s = 4), startedAt))
+    }
+}
