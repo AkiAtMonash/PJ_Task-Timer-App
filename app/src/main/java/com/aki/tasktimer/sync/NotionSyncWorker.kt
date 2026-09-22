@@ -78,6 +78,11 @@ class NotionSyncWorker(
 
     /** 「進行中」ページを作り、ページ id を記録に紐づける。 */
     private suspend fun create(token: String, databaseId: String, session: Session, zone: ZoneId): NotionResult {
+        // すでにページを持っているなら作らない。id を控えた直後に送信が打ち切られると行列は
+        // PENDING のまま残り、次に起きたときに同じ開始をもう一度送って 2 枚目ができる。
+        // 通信を伴わない歯止めなので、下の照会が通らない場所（圏外・照会失敗）でも効く。
+        session.notionPageId?.let { return NotionResult.Ok(it) }
+
         // 先に Notion へ聞く（ADR 0002）。端末が寝て送信が打ち切られると、Notion にはページが
         // できているのにアプリは id を控えられない。そのまま作り直すと 2 枚目ができ、1 枚目が
         // 「進行中」のまま取り残される。実際に 2026-09 に 7 件溜まった。
