@@ -99,7 +99,7 @@ class NotionSyncWorker(
      */
     private suspend fun adopt(token: String, databaseId: String, session: Session): String? {
         val pages = api.queryRunningPages(token, databaseId) ?: return null
-        val pageId = pages.firstOrNull { NotionPayload.sameStart(it.startMillis, session.startedAt) }?.id
+        val pageId = pages.firstOrNull { NotionPayload.sameSession(it, session) }?.id
             ?: return null
         queueDao.setNotionPageId(session.id, pageId)
         return pageId

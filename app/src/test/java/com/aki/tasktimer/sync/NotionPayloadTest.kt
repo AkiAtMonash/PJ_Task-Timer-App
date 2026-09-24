@@ -245,10 +245,22 @@ class NotionPayloadQueryTest {
     }
 
     @Test
-    fun `突き合わせは秒まで　ミリ秒の差は同じ扱い`() {
-        val startedAt = jst(2026, 7, 29, 14, 0, s = 3, ms = 480)
-        // 送るときに秒未満を落としているので、Notion 側は 14:00:03 ちょうどで返ってくる。
-        assertTrue(NotionPayload.sameStart(jst(2026, 7, 29, 14, 0, s = 3), startedAt))
-        assertFalse(NotionPayload.sameStart(jst(2026, 7, 29, 14, 0, s = 4), startedAt))
+    fun `突き合わせは分まで　Notion は秒を落として返す`() {
+        val startedAt = jst(2026, 7, 29, 14, 0, s = 23, ms = 480)
+        // 14:00:23 で送っても、Notion の応答は 14:00:00.000 になる（2026-09-23 の実データで確認）。
+        assertTrue(NotionPayload.sameStart(jst(2026, 7, 29, 14, 0), startedAt))
+        assertFalse(NotionPayload.sameStart(jst(2026, 7, 29, 14, 1), startedAt))
+    }
+
+    @Test
+    fun `実際の応答形で自分のページを見つける　同じ分の別タスクは拾わない`() {
+        val body = """
+            {"results":[
+              {"id":"other","properties":{"名前":{"title":[{"plain_text":"昼飯"}]},"time":{"date":{"start":"2026-07-29T14:00:00.000+09:00"}}}},
+              {"id":"mine","properties":{"名前":{"title":[{"plain_text":"ES"},{"plain_text":"執筆"}]},"time":{"date":{"start":"2026-07-29T14:00:00.000+09:00"}}}}
+            ]}
+        """.trimIndent()
+        val s = session(endedAt = null).copy(startedAt = jst(2026, 7, 29, 14, 0, s = 41))
+        assertEquals(listOf("mine"), NotionPayload.parsePageRefs(body).filter { NotionPayload.sameSession(it, s) }.map { it.id })
     }
 }

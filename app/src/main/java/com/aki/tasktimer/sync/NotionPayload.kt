@@ -53,10 +53,10 @@ object NotionPayload {
             .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
     /**
-     * 照会で見つかった既存ページ。開始時刻の突き合わせにしか使わないので id と開始だけ持つ。
+     * 照会で見つかった既存ページ。突き合わせにしか使わないので id・開始・名前だけ持つ。
      * [startMillis] は Notion の date.start を epoch millis に直したもの。
      */
-    data class PageRef(val id: String, val startMillis: Long)
+    data class PageRef(val id: String, val startMillis: Long, val name: String)
 
     /**
      * 「進行中」のページだけを引く POST /v1/databases/{id}/query の本文。
@@ -87,15 +87,25 @@ object NotionPayload {
                 ?: return@mapNotNull null
             val millis = runCatching { OffsetDateTime.parse(start).toInstant().toEpochMilli() }.getOrNull()
                 ?: return@mapNotNull null
-            PageRef(id, millis)
+            val name = page.optJSONObject("properties")?.optJSONObject(PROP_TITLE)?.optJSONArray("title")
+                ?.let { t -> (0 until t.length()).joinToString("") { t.optJSONObject(it)?.optString("plain_text").orEmpty() } }
+                .orEmpty()
+            PageRef(id, millis, name)
         }
     }
 
     /**
-     * 同じ開始時刻か。送るときに秒未満を落としている（[toIso]）ので、比較も秒までで行う。
+     * 同じ開始時刻か。Notion は date を分単位で保存し、秒を送っても 0 秒で返してくるので、比較は分までで行う。
+     * 秒まで比べていた頃は照合がほぼ当たらず、2026-09-23 にも「進行中」が取り残された。
      */
     fun sameStart(pageStartMillis: Long, startedAt: Long): Boolean =
-        Math.floorDiv(pageStartMillis, 1000L) == Math.floorDiv(startedAt, 1000L)
+        Math.floorDiv(pageStartMillis, 60_000L) == Math.floorDiv(startedAt, 60_000L)
+
+    /**
+     * そのページが [session] のものか。分単位だと、同じ分に切り替えた別タスクのページと区別できないので名前も見る。
+     */
+    fun sameSession(page: PageRef, session: Session): Boolean =
+        sameStart(page.startMillis, session.startedAt) && page.name == session.name
 
     /** 開始時：「進行中」のページを作る POST /v1/pages の本文。 */
     fun createRunningPage(databaseId: String, session: Session, zone: ZoneId): JSONObject =
