@@ -95,17 +95,13 @@ object NotionPayload {
     }
 
     /**
-     * 同じ開始時刻か。Notion は date を分単位で保存し、秒を送っても 0 秒で返してくるので、比較は分までで行う。
-     * 秒まで比べていた頃は照合がほぼ当たらず、2026-09-23 にも「進行中」が取り残された。
-     */
-    fun sameStart(pageStartMillis: Long, startedAt: Long): Boolean =
-        Math.floorDiv(pageStartMillis, 60_000L) == Math.floorDiv(startedAt, 60_000L)
-
-    /**
-     * そのページが [session] のものか。分単位だと、同じ分に切り替えた別タスクのページと区別できないので名前も見る。
+     * そのページが [session] のものか。開始時刻は分までで比べる：Notion は date を分単位で保存し、
+     * 秒を送っても 0 秒で返してくる（秒まで比べていた頃は照合がほぼ当たらず、2026-09-23 にも
+     * 「進行中」が取り残された）。分単位だと同じ分に切り替えた別タスクと区別できないので名前も見る。
      */
     fun sameSession(page: PageRef, session: Session): Boolean =
-        sameStart(page.startMillis, session.startedAt) && page.name == session.name
+        Math.floorDiv(page.startMillis, 60_000L) == Math.floorDiv(session.startedAt, 60_000L) &&
+            page.name == session.name
 
     /** 開始時：「進行中」のページを作る POST /v1/pages の本文。 */
     fun createRunningPage(databaseId: String, session: Session, zone: ZoneId): JSONObject =

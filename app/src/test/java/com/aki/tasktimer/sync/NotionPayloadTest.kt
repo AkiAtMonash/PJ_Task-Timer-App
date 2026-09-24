@@ -245,15 +245,8 @@ class NotionPayloadQueryTest {
     }
 
     @Test
-    fun `突き合わせは分まで　Notion は秒を落として返す`() {
-        val startedAt = jst(2026, 7, 29, 14, 0, s = 23, ms = 480)
-        // 14:00:23 で送っても、Notion の応答は 14:00:00.000 になる（2026-09-23 の実データで確認）。
-        assertTrue(NotionPayload.sameStart(jst(2026, 7, 29, 14, 0), startedAt))
-        assertFalse(NotionPayload.sameStart(jst(2026, 7, 29, 14, 1), startedAt))
-    }
-
-    @Test
     fun `実際の応答形で自分のページを見つける　同じ分の別タスクは拾わない`() {
+        // 14:00:41 に始めても、Notion の応答は 14:00:00.000 になる（2026-09-23 の実データで確認）。
         val body = """
             {"results":[
               {"id":"other","properties":{"名前":{"title":[{"plain_text":"昼飯"}]},"time":{"date":{"start":"2026-07-29T14:00:00.000+09:00"}}}},
